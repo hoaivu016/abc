@@ -22,11 +22,13 @@ export interface KpiTarget {
 
 export interface SupportDepartmentBonus {
   id: string;
-  departmentId: string;
-  bonusAmount: number;
-  isActive: boolean;
-  month: number;
-  year: number;
+  department: string;
+  bonusMonth: Date | null;
+  bonusAmount: number | null;
+  achievementRate: number | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface StaffKpiData {

@@ -1488,11 +1488,38 @@ function App() {
   // Xử lý lưu thưởng phòng hỗ trợ
   const handleSaveSupportBonus = async (bonuses: SupportDepartmentBonus[]) => {
     try {
+      // Kiểm tra dữ liệu đầu vào
+      if (!Array.isArray(bonuses)) {
+        throw new Error('Dữ liệu thưởng không hợp lệ');
+      }
+
+      // Chuẩn bị dữ liệu để lưu
+      const dataToSave = bonuses.map(bonus => {
+        if (!bonus.department) {
+          throw new Error('Tên phòng ban không được để trống');
+        }
+
+        return {
+          department: bonus.department,
+          bonus_month: bonus.bonusMonth instanceof Date 
+            ? bonus.bonusMonth.toISOString()
+            : bonus.bonusMonth,
+          bonus_amount: bonus.bonusAmount,
+          achievement_rate: bonus.achievementRate,
+          notes: bonus.notes,
+          updated_at: new Date().toISOString(),
+          ...(bonus.id && { id: bonus.id })
+        };
+      });
+
       if (isOnline) {
         // Cập nhật trong Supabase
         const { error } = await supabase
           .from('support_bonuses')
-          .upsert(bonuses);
+          .upsert(dataToSave, { 
+            onConflict: 'id',
+            ignoreDuplicates: false
+          });
 
         if (error) throw error;
       } else {
@@ -1513,7 +1540,7 @@ function App() {
     } catch (error) {
       console.error('Lỗi khi cập nhật thưởng phòng hỗ trợ:', error);
       setSyncMessageData({
-        message: 'Lỗi khi cập nhật thưởng phòng hỗ trợ',
+        message: error instanceof Error ? error.message : 'Lỗi khi cập nhật thưởng phòng hỗ trợ',
         type: 'error'
       });
       setShowSyncMessage(true);

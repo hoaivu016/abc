@@ -18,6 +18,16 @@ interface KpiDataParams {
   selectedYear: number;
 }
 
+interface SupportBonusData {
+  id?: string;
+  department: string;
+  bonus_month: string | null;
+  bonus_amount: number | null;
+  achievement_rate: number | null;
+  notes: string | null;
+  updated_at: string;
+}
+
 export const useKpiData = (params: KpiDataParams) => {
   const { selectedMonth, selectedYear, currentKpis = [], currentSupportBonuses = [] } = params;
   
@@ -231,35 +241,43 @@ export const useKpiData = (params: KpiDataParams) => {
     setState(prev => ({ ...prev, isLoading: true, error: null }));
     
     try {
+      // Kiểm tra dữ liệu đầu vào
+      if (!Array.isArray(bonuses)) {
+        throw new Error('Dữ liệu thưởng không hợp lệ');
+      }
+
       // Chuẩn bị dữ liệu để lưu
-      const dataToSave = bonuses.map(bonus => {
-        const data: any = { ...bonus };
-        
-        // Cập nhật dữ liệu khớp với schema
-        if (data.bonusMonth) {
-          data.bonus_month = data.bonusMonth instanceof Date 
-            ? data.bonusMonth.toISOString()
-            : data.bonusMonth;
-          delete data.bonusMonth;
+      const dataToSave: SupportBonusData[] = bonuses.map(bonus => {
+        if (!bonus.department) {
+          throw new Error('Tên phòng ban không được để trống');
         }
-        
-        if (data.bonusAmount !== undefined) {
-          data.bonus_amount = data.bonusAmount;
-          delete data.bonusAmount;
+
+        const data: SupportBonusData = {
+          department: bonus.department,
+          bonus_month: bonus.bonusMonth instanceof Date 
+            ? bonus.bonusMonth.toISOString()
+            : bonus.bonusMonth,
+          bonus_amount: bonus.bonusAmount,
+          achievement_rate: bonus.achievementRate,
+          notes: bonus.notes,
+          updated_at: new Date().toISOString()
+        };
+
+        // Chỉ thêm id nếu có
+        if (bonus.id) {
+          data.id = bonus.id;
         }
-        
-        if (data.achievementRate !== undefined) {
-          data.achievement_rate = data.achievementRate;
-          delete data.achievementRate;
-        }
-        
+
         return data;
       });
       
       // Đối với mỗi bonus, cần upsert (insert hoặc update)
       const { error } = await supabase
         .from('support_bonuses')
-        .upsert(dataToSave, { onConflict: 'id' });
+        .upsert(dataToSave, { 
+          onConflict: 'id',
+          ignoreDuplicates: false
+        });
       
       if (error) throw new Error(`Lỗi khi lưu thưởng: ${error.message}`);
       
