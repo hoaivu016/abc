@@ -26,13 +26,14 @@ export interface KpiTarget {
 
 // Interface cho thưởng bộ phận hỗ trợ
 export interface SupportDepartmentBonus {
-  id: string;
-  team: StaffTeam;
-  bonusAmount: number;
-  month: number;
-  year: number;
-  createdAt?: string | Date;
-  updatedAt?: string | Date;
+  department: string; // Phòng ban
+  bonusMonth: Date | null; // Tháng thưởng
+  bonusAmount: number | null; // Số tiền thưởng
+  achievementRate: number | null; // Tỷ lệ hoàn thành
+  notes: string | null; // Ghi chú
+  created_at: string; // Ngày tạo
+  updated_at: string; // Ngày cập nhật
+  id: string; // Đặt id ở cuối để khớp với schema DB
 }
 
 // Hàm tính toán % hoàn thành KPI

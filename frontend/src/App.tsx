@@ -30,6 +30,7 @@ import Admin from './modules/admin/components/Admin';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import DirectionsCarIcon from '@mui/icons-material/DirectionsCar';
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
+import BarChartIcon from '@mui/icons-material/BarChart';
 import { 
   Vehicle, 
   VehicleStatus, 
@@ -59,8 +60,13 @@ import {
   loadStaffFromSupabase,
   loadKpiFromSupabase,
   loadSupportBonusFromSupabase,
-  savePendingSync 
+  savePendingSync,
+  handleStaffDelete,
+  syncVehicleToSupabase
 } from './lib/database/syncService';
+import { FinancialAnalysis } from './modules/admin/components';
+// Import hook
+import { useVehicleDelete } from './hooks/useVehicleDelete';
 
 // Định nghĩa interface cho các tab
 interface TabPanelProps {
@@ -91,6 +97,11 @@ interface AppState {
   showSyncMessage: boolean;
   syncMessageData: SyncMessage;
   kpiList: KpiTarget[];
+  financialData: {
+    capitalAmount: number;
+    loanAmount: number;
+    interestRate: number;
+  };
 }
 
 // Component TabPanel để hiển thị nội dung của từng tab
@@ -154,7 +165,12 @@ function App() {
     currentTab: 0,
     showSyncMessage: false,
     syncMessageData: { message: '', type: 'info' },
-    kpiList: []
+    kpiList: [],
+    financialData: {
+      capitalAmount: 0,
+      loanAmount: 0,
+      interestRate: 0
+    }
   });
 
   const {
@@ -171,7 +187,8 @@ function App() {
     currentTab,
     showSyncMessage,
     syncMessageData,
-    kpiList
+    kpiList,
+    financialData
   } = state;
 
   // State cho đồng bộ hóa
@@ -546,12 +563,12 @@ function App() {
     );
     
     // Tính công nợ dựa trên giá bán và các khoản thanh toán
-    const debt = calculateDebt(vehicle.salePrice, vehicle.payments);
+    const debt = calculateDebt(vehicle.sellPrice, vehicle.payments);
     
     // Tính lợi nhuận dựa trên giá bán, giá mua và chi phí
     const profit = calculateProfit({
       purchasePrice: vehicle.purchasePrice,
-      salePrice: vehicle.salePrice,
+      sellPrice: vehicle.sellPrice,
       cost: vehicle.cost,
       debt: debt
     });
@@ -613,7 +630,7 @@ function App() {
       if (vehicleData.purchasePrice <= 0) {
         throw new Error('Giá mua phải lớn hơn 0');
       }
-      if (vehicleData.salePrice <= vehicleData.purchasePrice) {
+      if (vehicleData.sellPrice <= vehicleData.purchasePrice) {
         throw new Error('Giá bán phải lớn hơn giá mua');
       }
 
@@ -630,10 +647,10 @@ function App() {
         manufacturingYear: vehicleData.manufacturingYear,
         odo: vehicleData.odo || 0,
         purchasePrice: vehicleData.purchasePrice,
-        salePrice: vehicleData.salePrice,
+        sellPrice: vehicleData.sellPrice,
         importDate: vehicleData.importDate || new Date(),
         exportDate: vehicleData.exportDate,
-        note: vehicleData.note?.trim() || '',
+        notes: vehicleData.notes?.trim() || '',
         status: VehicleStatus.IN_STOCK,
         cost: 0,
         costs: [],
@@ -648,6 +665,7 @@ function App() {
           expectedCommission: 0
         },
         statusHistory: [{
+          id: `STATUS_${Date.now()}`,
           fromStatus: VehicleStatus.IN_STOCK,
           toStatus: VehicleStatus.IN_STOCK,
           changedAt: new Date(),
@@ -671,177 +689,291 @@ function App() {
 
       if (isOnline) {
         try {
-          // Thêm vào Supabase nếu online
-          const { error } = await supabase
-            .from('vehicles')
-            .insert([calculatedVehicle]);
-
-          if (error) {
-            console.error('Lỗi Supabase:', error);
-            // Lưu vào pending sync nếu có lỗi khi thêm vào Supabase
+          // Đồng bộ trực tiếp với Supabase thông qua syncVehicleToSupabase
+          const syncResult = await syncVehicleToSupabase(calculatedVehicle);
+          
+          if (!syncResult) {
+            console.error('Lỗi khi đồng bộ xe. Lưu vào hàng đợi để đồng bộ sau.');
             savePendingSync({ type: 'vehicle_add', data: calculatedVehicle });
-            throw new Error(`Lỗi khi lưu dữ liệu: ${error.message}`);
+          } else {
+            console.log('Thêm xe mới thành công và đã đồng bộ với Supabase');
+            
+            // Hiển thị thông báo thành công
+            setSyncMessageData({
+              message: 'Thêm xe mới thành công và đã đồng bộ với cơ sở dữ liệu',
+              type: 'success'
+            });
+            setShowSyncMessage(true);
+            
+            // Ẩn thông báo sau 3 giây
+            setTimeout(() => {
+              setShowSyncMessage(false);
+            }, 3000);
           }
+          
+          return calculatedVehicle;
         } catch (supabaseError) {
           console.error('Lỗi khi thêm xe vào Supabase:', supabaseError);
-          // Lưu vào pending sync
           savePendingSync({ type: 'vehicle_add', data: calculatedVehicle });
-          setState(prev => ({
-            ...prev,
-            syncMessageData: {
-              message: 'Đã lưu xe mới nhưng chưa đồng bộ được với server',
-              type: 'warning'
-            },
-            showSyncMessage: true
-          }));
+          throw new Error(`Lỗi khi thêm xe vào Supabase: ${supabaseError instanceof Error ? supabaseError.message : 'Lỗi không xác định'}`);
         }
       } else {
-        // Lưu vào pending sync nếu offline
+        console.log('Đang offline. Xe sẽ được đồng bộ khi có kết nối.');
         savePendingSync({ type: 'vehicle_add', data: calculatedVehicle });
       }
 
-      // Hiển thị thông báo thành công
-      setState(prev => ({
-        ...prev,
-        syncMessageData: {
-          message: 'Thêm xe mới thành công',
-          type: 'success'
-        },
-        showSyncMessage: true
-      }));
-
-      // Tự động ẩn thông báo sau 3 giây
-      setTimeout(() => {
-        setState(prev => ({
-          ...prev,
-          showSyncMessage: false
-        }));
-      }, 3000);
-
-      // Đóng form
-      setIsVehicleFormOpen(false);
-
+      return calculatedVehicle;
     } catch (error) {
       console.error('Lỗi khi thêm xe:', error);
-      setState(prev => ({
-        ...prev,
-        syncMessageData: {
-          message: error instanceof Error ? error.message : 'Lỗi khi thêm xe mới',
-          type: 'error'
-        },
-        showSyncMessage: true
-      }));
-
-      setTimeout(() => {
-        setState(prev => ({
-          ...prev,
-          showSyncMessage: false
-        }));
-      }, 3000);
+      throw error;
     }
   };
 
   // Xử lý chỉnh sửa xe
   const handleEditVehicle = async (vehicleData: Partial<Vehicle>) => {
     try {
-      setHasUnsavedChanges(false);
-      
-      // Tìm xe cần cập nhật
-      const existingVehicle = vehicles.find(v => v.id === vehicleData.id);
-      if (!existingVehicle) {
-        throw new Error('Không tìm thấy xe cần cập nhật');
+      // Validation đầu vào
+      if (!vehicleData.id) {
+        throw new Error('ID xe là bắt buộc');
+      }
+      if (vehicleData.purchasePrice && vehicleData.purchasePrice <= 0) {
+        throw new Error('Giá mua phải lớn hơn 0');
+      }
+      if (vehicleData.sellPrice && vehicleData.sellPrice <= 0) {
+        throw new Error('Giá bán phải lớn hơn 0');
+      }
+      if (vehicleData.purchasePrice && vehicleData.sellPrice && vehicleData.sellPrice <= vehicleData.purchasePrice) {
+        throw new Error('Giá bán phải lớn hơn giá mua');
+      }
+      if (vehicleData.odo && vehicleData.odo < 0) {
+        throw new Error('Số km không được âm');
       }
 
-      // Tạo đối tượng xe đã cập nhật
-      const updatedVehicle = updateVehicleCalculations({
-        ...existingVehicle,
-        ...vehicleData
-      } as Vehicle);
+      setHasUnsavedChanges(false);
+      
+      // Tìm xe trong state
+      const existingVehicle = vehicles.find(v => v.id === vehicleData.id);
+      console.log('[Edit Vehicle] Tìm xe trong state:', existingVehicle);
+      
+      // Nếu không tìm thấy trong state, thử tìm trong localStorage
+      if (!existingVehicle) {
+        console.log('[Edit Vehicle] Không tìm thấy xe trong state, tìm trong localStorage');
+        const savedVehicles = localStorage.getItem('vehicles');
+        const localVehicles = savedVehicles ? JSON.parse(savedVehicles) : [];
+        const localVehicle = localVehicles.find(v => v.id === vehicleData.id);
+        
+        if (!localVehicle) {
+          console.error('[Edit Vehicle] Không tìm thấy xe trong cả state và localStorage');
+          throw new Error('Không tìm thấy xe cần cập nhật');
+        }
 
-      if (isOnline) {
-        // Cập nhật trong Supabase
-        const { error } = await supabase
-          .from('vehicles')
-          .update(updatedVehicle)
-          .eq('id', updatedVehicle.id);
+        console.log('[Edit Vehicle] Tìm thấy xe trong localStorage:', localVehicle);
+        
+        // Cập nhật state với xe từ localStorage
+        const updatedVehicle = updateVehicleCalculations({
+          ...localVehicle,
+          ...vehicleData,
+          updated_at: new Date().toISOString()
+        } as Vehicle);
 
-        if (error) throw error;
-      } else {
-        // Cập nhật trong localStorage và pending sync
-        const updatedVehicles = vehicles.map(v => 
-          v.id === updatedVehicle.id ? updatedVehicle : v
-        );
+        // Cập nhật state
         setState(prev => ({
           ...prev,
-          vehicleList: updatedVehicles
+          vehicleList: [...prev.vehicleList, updatedVehicle]
         }));
-        localStorage.setItem('vehicles', JSON.stringify(updatedVehicles));
+
+        // Đồng bộ với Supabase
+        await syncVehicleToSupabase(updatedVehicle);
+        return;
+      }
+
+      // Tạo đối tượng xe đã cập nhật với dữ liệu mới
+      const updatedVehicle = updateVehicleCalculations({
+        ...existingVehicle,
+        ...vehicleData,
+        updated_at: new Date().toISOString()
+      } as Vehicle);
+
+      console.log('[Edit Vehicle] Xe sau khi cập nhật:', updatedVehicle);
+
+      // Cập nhật state trước
+      setState(prev => ({
+        ...prev,
+        vehicleList: prev.vehicleList.map(v => 
+          v.id === updatedVehicle.id ? updatedVehicle : v
+        )
+      }));
+
+      // Lưu vào localStorage
+      const updatedVehicles = vehicles.map(v => 
+        v.id === updatedVehicle.id ? updatedVehicle : v
+      );
+      localStorage.setItem('vehicles', JSON.stringify(updatedVehicles));
+
+      // Nếu online, đồng bộ với Supabase
+      if (isOnline) {
+        try {
+          console.log('[Edit Vehicle] Bắt đầu đồng bộ với Supabase');
+          
+          // Chuẩn bị dữ liệu cho Supabase
+          const vehicleForSupabase = {
+            id: updatedVehicle.id,
+            name: updatedVehicle.name,
+            color: updatedVehicle.color,
+            manufacturing_year: updatedVehicle.manufacturingYear,
+            odo: updatedVehicle.odo,
+            purchase_price: updatedVehicle.purchasePrice,
+            sell_price: updatedVehicle.sellPrice,
+            import_date: updatedVehicle.importDate instanceof Date 
+              ? updatedVehicle.importDate.toISOString() 
+              : updatedVehicle.importDate,
+            export_date: updatedVehicle.exportDate instanceof Date 
+              ? updatedVehicle.exportDate?.toISOString() 
+              : updatedVehicle.exportDate,
+            status: updatedVehicle.status,
+            cost: updatedVehicle.cost,
+            debt: updatedVehicle.debt,
+            profit: updatedVehicle.profit,
+            storage_time: updatedVehicle.storageTime,
+            sales_staff_id: updatedVehicle.saleStaff?.id || null,
+            notes: updatedVehicle.notes || '',
+            updated_at: new Date().toISOString()
+          };
+
+          // Cập nhật thông tin xe
+          const { error: vehicleError } = await supabase
+            .from('vehicles')
+            .update(vehicleForSupabase)
+            .eq('id', updatedVehicle.id);
+
+          if (vehicleError) {
+            throw vehicleError;
+          }
+
+          // Cập nhật chi phí
+          if (updatedVehicle.costs?.length > 0) {
+            // Xóa chi phí cũ
+            await supabase
+              .from('vehicle_costs')
+              .delete()
+              .eq('vehicle_id', updatedVehicle.id);
+            
+            // Thêm chi phí mới
+            const costsForSupabase = updatedVehicle.costs.map(cost => ({
+              id: cost.id,
+              vehicle_id: updatedVehicle.id,
+              amount: cost.amount,
+              cost_date: cost.costDate instanceof Date 
+                ? cost.costDate.toISOString() 
+                : cost.costDate,
+              description: cost.description,
+              created_at: cost.created_at || new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            }));
+            
+            const { error: costsError } = await supabase
+              .from('vehicle_costs')
+              .insert(costsForSupabase);
+            
+            if (costsError) {
+              console.error('[Edit Vehicle] Lỗi khi cập nhật chi phí:', costsError);
+            }
+          }
+          
+          // Cập nhật thanh toán
+          if (updatedVehicle.payments?.length > 0) {
+            // Xóa thanh toán cũ
+            await supabase
+              .from('vehicle_payments')
+              .delete()
+              .eq('vehicle_id', updatedVehicle.id);
+            
+            // Thêm thanh toán mới
+            const paymentsForSupabase = updatedVehicle.payments.map(payment => ({
+              id: payment.id,
+              vehicle_id: updatedVehicle.id,
+              amount: payment.amount,
+              payment_date: payment.date instanceof Date
+                ? payment.date.toISOString()
+                : payment.date,
+              payment_type: payment.type,
+              notes: payment.notes,
+              created_at: payment.created_at || new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            }));
+            
+            const { error: paymentsError } = await supabase
+              .from('vehicle_payments')
+              .insert(paymentsForSupabase);
+            
+            if (paymentsError) {
+              console.error('[Edit Vehicle] Lỗi khi cập nhật thanh toán:', paymentsError);
+            }
+          }
+
+          console.log('[Edit Vehicle] Đồng bộ với Supabase thành công');
+          
+          // Hiển thị thông báo thành công
+          setSyncMessageData({
+            message: 'Cập nhật xe thành công',
+            type: 'success'
+          });
+          setShowSyncMessage(true);
+          setTimeout(() => setShowSyncMessage(false), 3000);
+        } catch (error) {
+          console.error('[Edit Vehicle] Lỗi khi đồng bộ với Supabase:', error);
+          // Lưu vào pending sync để thử lại sau
+          savePendingSync({ type: 'vehicle_update', data: updatedVehicle });
+          throw new Error(`Lỗi khi đồng bộ: ${error instanceof Error ? error.message : 'Lỗi không xác định'}`);
+        }
+      } else {
+        console.log('[Edit Vehicle] Đang offline, lưu vào pending sync');
         savePendingSync({ type: 'vehicle_update', data: updatedVehicle });
       }
 
-      // Hiển thị thông báo thành công
+    } catch (error) {
+      console.error('[Edit Vehicle] Lỗi:', error);
       setSyncMessageData({
-        message: 'Cập nhật xe thành công',
-        type: 'success'
+        message: error instanceof Error ? error.message : 'Lỗi không xác định khi cập nhật xe',
+        type: 'error'
       });
       setShowSyncMessage(true);
       setTimeout(() => setShowSyncMessage(false), 3000);
+      throw error;
+    }
+  };
 
-    } catch (error) {
-      console.error('Lỗi khi cập nhật xe:', error);
+  // Sử dụng hook xóa xe
+  const { deleteVehicle, isDeleting, error: deleteError } = useVehicleDelete({
+    supabase,
+    onSuccess: () => {
+      setState(prev => ({
+        ...prev,
+        vehicleList: prev.vehicleList.filter(v => v.id !== vehicleToDelete)
+      }));
+      
+      // Xóa khỏi localStorage
+      const localVehicles = JSON.parse(localStorage.getItem('vehicles') || '[]');
+      localStorage.setItem('vehicles', JSON.stringify(localVehicles.filter((v: Vehicle) => v.id !== vehicleToDelete)));
+    },
+    onError: (error) => {
+      console.error('Lỗi khi xóa xe:', error);
       setSyncMessageData({
-        message: 'Lỗi khi cập nhật xe',
+        message: error.message,
         type: 'error'
       });
       setShowSyncMessage(true);
       setTimeout(() => setShowSyncMessage(false), 3000);
     }
-  };
+  });
 
-  // Xử lý xóa xe
+  // Cập nhật hàm handleDeleteVehicle
   const handleDeleteVehicle = async (vehicleId: string) => {
     try {
-      // Kiểm tra tồn tại của xe
-      const vehicleToDelete = vehicles.find(v => v.id === vehicleId);
-      if (!vehicleToDelete) {
-        throw new Error('Không tìm thấy xe cần xóa');
-      }
-
-      if (isOnline) {
-        // Xóa từ Supabase
-        const { error } = await supabase
-          .from('vehicles')
-          .delete()
-          .eq('id', vehicleId);
-
-        if (error) throw error;
-      } else {
-        // Xóa từ localStorage và thêm vào pending sync
-        const updatedVehicles = vehicles.filter(v => v.id !== vehicleId);
-        setState(prev => ({
-          ...prev,
-          vehicleList: updatedVehicles
-        }));
-        localStorage.setItem('vehicles', JSON.stringify(updatedVehicles));
-        savePendingSync({ type: 'vehicle_delete', data: { id: vehicleId } });
-      }
-
-      // Hiển thị thông báo thành công
-      setSyncMessageData({
-        message: `Đã xóa xe ${vehicleToDelete.name} thành công`,
-        type: 'success'
-      });
-      setShowSyncMessage(true);
-      setTimeout(() => setShowSyncMessage(false), 3000);
-
+      await deleteVehicle(vehicleId);
     } catch (error) {
       console.error('Lỗi khi xóa xe:', error);
-      setSyncMessageData({
-        message: 'Lỗi khi xóa xe',
-        type: 'error'
-      });
-      setShowSyncMessage(true);
-      setTimeout(() => setShowSyncMessage(false), 3000);
+      throw error;
     }
   };
 
@@ -858,13 +990,20 @@ function App() {
   };
 
   // Xử lý xác nhận thay đổi trạng thái xe
-  const handleStatusChangeConfirm = (updatedVehicle: Vehicle) => {
+  const handleStatusChangeConfirm = async (updatedVehicle: Vehicle) => {
     // Lưu trạng thái cũ trước khi cập nhật
     const oldVehicle = vehicles.find(v => v.id === updatedVehicle.id);
     const oldStatus = oldVehicle?.status;
     
     // Cập nhật các giá trị tính toán của xe
     const calculatedVehicle = updateVehicleCalculations(updatedVehicle);
+    
+    // Kiểm tra trạng thái đặc biệt
+    if (calculatedVehicle.status === VehicleStatus.SOLD) {
+      // Đảm bảo công nợ đã được xóa khi xe đã bán
+      calculatedVehicle.debt = 0;
+      console.log(`Đảm bảo công nợ = 0 khi xe đã bán: ${calculatedVehicle.id}`);
+    }
     
     // Cập nhật trạng thái xe
     setState(prev => ({
@@ -880,6 +1019,29 @@ function App() {
         vehicle.id === calculatedVehicle.id ? calculatedVehicle : vehicle
       )
     ));
+    
+    // Đồng bộ với Supabase nếu online
+    if (isOnline) {
+      try {
+        // Sử dụng hàm syncVehicleToSupabase để đồng bộ cả thông tin xe và thanh toán
+        console.log(`Bắt đầu đồng bộ xe ${calculatedVehicle.id}, công nợ hiện tại: ${calculatedVehicle.debt}`);
+        const syncResult = await syncVehicleToSupabase(calculatedVehicle);
+        
+        if (!syncResult) {
+          console.error('Lỗi khi đồng bộ xe với Supabase');
+          // Lưu vào pending sync nếu có lỗi
+          savePendingSync({ type: 'vehicle_update', data: calculatedVehicle });
+        } else {
+          console.log(`Đồng bộ xe ${calculatedVehicle.id} thành công!`);
+        }
+      } catch (e) {
+        console.error('Lỗi khi đồng bộ trạng thái xe:', e);
+        savePendingSync({ type: 'vehicle_update', data: calculatedVehicle });
+      }
+    } else {
+      // Lưu vào pending sync nếu offline
+      savePendingSync({ type: 'vehicle_update', data: calculatedVehicle });
+    }
     
     // Cập nhật thông tin nhân viên liên quan
     if (calculatedVehicle.saleStaff && calculatedVehicle.saleStaff.id) {
@@ -954,6 +1116,56 @@ function App() {
         vehicles.map(v => v.id === vehicleId ? calculatedVehicle : v)
       ));
 
+      // Đồng bộ với Supabase nếu online
+      if (isOnline) {
+        try {
+          // Tạo đối tượng chi phí để lưu trong Supabase
+          const costData = {
+            vehicle_id: vehicleId,
+            amount: newCost.amount,
+            cost_date: newCost.date.toISOString(),
+            description: newCost.description,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            id: newCost.id // Đặt id ở cuối để khớp với schema DB
+          };
+          
+          // Thêm chi phí vào bảng vehicle_costs
+          const { error: costError } = await supabase
+            .from('vehicle_costs')
+            .insert([costData]);
+            
+          if (costError) {
+            console.error('Lỗi khi thêm chi phí vào Supabase:', costError);
+          }
+            
+          // Cập nhật tổng chi phí trong bảng vehicles
+          const vehicleForSupabase = {
+            id: calculatedVehicle.id,
+            cost: calculatedVehicle.cost,
+            profit: calculatedVehicle.profit,
+            updated_at: new Date().toISOString()
+          };
+            
+          const { error: vehicleError } = await supabase
+            .from('vehicles')
+            .update(vehicleForSupabase)
+            .eq('id', vehicleId);
+            
+          if (vehicleError) {
+            console.error('Lỗi khi cập nhật chi phí xe trong Supabase:', vehicleError);
+            // Lưu vào pending sync nếu có lỗi
+            savePendingSync({ type: 'vehicle_update', data: calculatedVehicle });
+          }
+        } catch (e) {
+          console.error('Lỗi khi đồng bộ chi phí xe:', e);
+          savePendingSync({ type: 'vehicle_update', data: calculatedVehicle });
+        }
+      } else {
+        // Lưu vào pending sync nếu offline
+        savePendingSync({ type: 'vehicle_update', data: calculatedVehicle });
+      }
+
       // Cập nhật KPI nếu cần thiết (khi chi phí ảnh hưởng đến lợi nhuận)
       if (calculatedVehicle.status === VehicleStatus.SOLD && calculatedVehicle.saleStaff?.id) {
         const saleStaffId = calculatedVehicle.saleStaff.id;
@@ -1000,19 +1212,76 @@ function App() {
         totalCommission: 0
       };
 
-      if (isOnline) {
-        // Thêm vào Supabase
-        const { error } = await supabase
-          .from('staff')
-          .insert([newStaff]);
+      // Thêm vào localStorage trước
+      const updatedStaffList = [...staffList, newStaff];
+      setStaffList(updatedStaffList);
+      localStorage.setItem('staffList', JSON.stringify(updatedStaffList));
 
-        if (error) throw error;
+      if (isOnline) {
+        try {
+          // Tạo đối tượng để đưa vào Supabase (chuyển đổi từ camelCase sang snake_case)
+          const staffForSupabase = {
+            id: newStaff.id,
+            name: newStaff.name,
+            phone: newStaff.phone,
+            email: newStaff.email,
+            team: newStaff.team,
+            role: newStaff.role,
+            status: newStaff.status,
+            join_date: newStaff.joinDate instanceof Date ? newStaff.joinDate.toISOString() : newStaff.joinDate,
+            leave_date: newStaff.terminationDate instanceof Date ? newStaff.terminationDate.toISOString() : null,
+            commission_rate: newStaff.commissionRate,
+            base_salary: newStaff.salary,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+            // Không đưa các trường không có trong bảng Supabase
+            // address, vehiclesSold, totalCommission, note không được đưa vào
+          };
+
+          // Thêm vào Supabase
+          const { error } = await supabase
+            .from('staff')
+            .insert([staffForSupabase]);
+
+          if (error) throw error;
+        } catch (error) {
+          console.error('Lỗi khi thêm nhân viên vào Supabase:', error);
+          // Lưu vào pending sync nếu có lỗi, chuyển đổi dữ liệu cho phù hợp với SyncAction
+          const staffForSync = {
+            id: newStaff.id,
+            name: newStaff.name,
+            phone: newStaff.phone,
+            email: newStaff.email,
+            team: newStaff.team,
+            role: newStaff.role,
+            status: newStaff.status,
+            joinDate: newStaff.joinDate,
+            leaveDate: newStaff.terminationDate,
+            commissionRate: newStaff.commissionRate,
+            baseSalary: newStaff.salary,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          };
+          savePendingSync({ type: 'staff_add', data: staffForSync });
+        }
       } else {
-        // Thêm vào localStorage và pending sync
-        const updatedStaffList = [...staffList, newStaff];
-        setStaffList(updatedStaffList);
-        localStorage.setItem('staffList', JSON.stringify(updatedStaffList));
-        savePendingSync({ type: 'staff_add', data: newStaff });
+        // Lưu vào pending sync nếu offline, chuyển đổi dữ liệu cho phù hợp với SyncAction
+        const staffForSync = {
+          id: newStaff.id,
+          name: newStaff.name,
+          phone: newStaff.phone,
+          email: newStaff.email,
+          team: newStaff.team,
+          role: newStaff.role,
+          status: newStaff.status,
+          joinDate: newStaff.joinDate,
+          leaveDate: newStaff.terminationDate,
+          commissionRate: newStaff.commissionRate,
+          baseSalary: newStaff.salary,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+        savePendingSync({ type: 'staff_add', data: staffForSync });
       }
 
       // Hiển thị thông báo thành công
@@ -1089,27 +1358,53 @@ function App() {
   // Xử lý xóa nhân viên
   const handleDeleteStaff = async (staffId: string) => {
     try {
-      // Kiểm tra tồn tại của nhân viên
+      // Kiểm tra xem nhân viên có tồn tại không
       const staffToDelete = staffList.find(s => s.id === staffId);
       if (!staffToDelete) {
-        throw new Error('Không tìm thấy nhân viên cần xóa');
+        throw new Error(`Không tìm thấy nhân viên với ID: ${staffId}`);
       }
 
+      console.log(`Đang xóa nhân viên: ${staffId}`, staffToDelete);
+      
+      // Nếu online, xóa từ Supabase trước
       if (isOnline) {
-        // Xóa từ Supabase
-        const { error } = await supabase
-          .from('staff')
-          .delete()
-          .eq('id', staffId);
-
-        if (error) throw error;
+        try {
+          console.log("Đang kết nối với Supabase để xóa nhân viên...");
+          
+          // Sử dụng hàm handleStaffDelete từ syncService
+          await handleStaffDelete({ type: 'staff_delete', data: { id: staffId } });
+          
+          console.log("Đã xóa nhân viên từ Supabase thành công");
+        } catch (supabaseError) {
+          console.error('Lỗi khi xóa nhân viên từ Supabase:', supabaseError);
+          
+          // Ghi nhận thao tác để đồng bộ sau nếu lỗi không phải là ràng buộc dữ liệu
+          if (!(supabaseError as Error).message?.includes('foreign key constraint')) {
+            savePendingSync({ type: 'staff_delete', data: { id: staffId } });
+          }
+          
+          // Hiển thị thông báo lỗi
+          setSyncMessageData({
+            message: `Lỗi khi xóa nhân viên: ${(supabaseError as Error).message}`,
+            type: 'error'
+          });
+          setShowSyncMessage(true);
+          setTimeout(() => setShowSyncMessage(false), 3000);
+          
+          // Nếu lỗi ràng buộc khóa ngoại, không xóa khỏi localStorage
+          if ((supabaseError as Error).message?.includes('foreign key constraint')) {
+            throw supabaseError; // Chuyển tiếp lỗi để component gọi có thể xử lý
+          }
+        }
       } else {
-        // Xóa từ localStorage và thêm vào pending sync
-        const updatedStaffList = staffList.filter(s => s.id !== staffId);
-        setStaffList(updatedStaffList);
-        localStorage.setItem('staffList', JSON.stringify(updatedStaffList));
+        // Nếu offline, lưu thao tác xóa vào hàng đợi đồng bộ
         savePendingSync({ type: 'staff_delete', data: { id: staffId } });
       }
+
+      // Sau khi xóa từ Supabase (hoặc nếu offline), cập nhật state và localStorage
+      const updatedStaffList = staffList.filter(staff => staff.id !== staffId);
+      setStaffList(updatedStaffList);
+      localStorage.setItem('staffList', JSON.stringify(updatedStaffList));
 
       // Hiển thị thông báo thành công
       setSyncMessageData({
@@ -1121,8 +1416,10 @@ function App() {
 
     } catch (error) {
       console.error('Lỗi khi xóa nhân viên:', error);
+      
+      // Hiển thị thông báo lỗi
       setSyncMessageData({
-        message: 'Lỗi khi xóa nhân viên',
+        message: `Lỗi khi xóa nhân viên: ${(error as Error).message}`,
         type: 'error'
       });
       setShowSyncMessage(true);
@@ -1275,7 +1572,7 @@ function App() {
       totalProfit += vehicle.profit;
       
       if (vehicle.status === VehicleStatus.SOLD) {
-        totalRevenue += vehicle.salePrice;
+        totalRevenue += vehicle.sellPrice;
       }
       
       // Cộng dồn chi phí
@@ -1543,6 +1840,23 @@ function App() {
     setState(prev => ({ ...prev, supportBonus: value }));
   };
 
+  // Thêm hàm cập nhật dữ liệu tài chính
+  const handleUpdateFinancialData = (data: any) => {
+    setState(prevState => ({
+      ...prevState,
+      financialData: {
+        ...prevState.financialData,
+        ...data
+      }
+    }));
+    
+    // Lưu dữ liệu tài chính vào localStorage
+    localStorage.setItem('financialData', JSON.stringify({
+      ...state.financialData,
+      ...data
+    }));
+  };
+
   return (
     <Box sx={{ 
       display: 'flex', 
@@ -1600,6 +1914,7 @@ function App() {
                       <Tab label="Báo Cáo" sx={{ fontWeight: 'bold', fontSize: '1.25rem' }} />
                       <Tab label="Danh Sách Xe" sx={{ fontWeight: 'bold', fontSize: '1.25rem' }} />
                       <Tab label="ADMIN" sx={{ fontWeight: 'bold', fontSize: '1.25rem' }} />
+                      <Tab label="Phân tích tài chính" sx={{ fontWeight: 'bold', fontSize: '1.25rem' }} />
                     </Tabs>
                   </AppBar>
                 </Paper>
@@ -1670,6 +1985,18 @@ function App() {
                   selectedMonth={globalMonth}
                   selectedYear={globalYear}
                   onDateChange={handleGlobalDateChange}
+                  onOpenVehicleList={() => setCurrentTab(0)}
+                />
+              </TabPanel>
+
+              {/* Hiển thị tab Phân tích tài chính */}
+              <TabPanel value={currentTab} index={3}>
+                <FinancialAnalysis 
+                  vehicles={state.vehicleList}
+                  capitalAmount={state.financialData.capitalAmount}
+                  loanAmount={state.financialData.loanAmount}
+                  interestRate={state.financialData.interestRate}
+                  onUpdateFinancialData={handleUpdateFinancialData}
                 />
               </TabPanel>
             </Box>
@@ -1728,6 +2055,16 @@ function App() {
               icon={<AdminPanelSettingsIcon />} 
               sx={{ 
                 color: currentTab === 2 ? 'primary.main' : 'text.secondary',
+                '&.Mui-selected': {
+                  color: 'primary.main'
+                }
+              }}
+            />
+            <BottomNavigationAction 
+              label="Phân tích tài chính" 
+              icon={<BarChartIcon />} 
+              sx={{ 
+                color: currentTab === 3 ? 'primary.main' : 'text.secondary',
                 '&.Mui-selected': {
                   color: 'primary.main'
                 }

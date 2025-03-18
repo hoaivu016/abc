@@ -36,19 +36,19 @@ interface StatusChangeModalProps {
   staffList: Staff[];
 }
 
-const StatusChangeModal: React.FC<StatusChangeModalProps> = ({ 
+const StatusChangeModal = ({ 
   open, 
   vehicle, 
   onClose,
   onStatusChange,
   staffList
-}) => {
-  const [newStatus, setNewStatus] = useState<VehicleStatus>(vehicle.status);
-  const [paymentAmount, setPaymentAmount] = useState<number>(0);
-  const [paymentNotes, setPaymentNotes] = useState<string>('');
-  const [validationError, setValidationError] = useState<string | null>(null);
-  const [previewDebt, setPreviewDebt] = useState<number | null>(null);
-  const [selectedStaffId, setSelectedStaffId] = useState<string>('');
+}: StatusChangeModalProps) => {
+  const [newStatus, setNewStatus] = useState(vehicle.status as VehicleStatus);
+  const [paymentAmount, setPaymentAmount] = useState(0);
+  const [paymentNotes, setPaymentNotes] = useState('');
+  const [validationError, setValidationError] = useState(null as string | null);
+  const [previewDebt, setPreviewDebt] = useState(null as number | null);
+  const [selectedStaffId, setSelectedStaffId] = useState('');
 
   useEffect(() => {
     if (open && vehicle) {
@@ -91,7 +91,7 @@ const StatusChangeModal: React.FC<StatusChangeModalProps> = ({
       return;
     }
 
-    if (statusRequiresSaleStaff.includes(newStatus) && !selectedStaffId) {
+    if (vehicle.status === VehicleStatus.IN_STOCK && statusRequiresSaleStaff.includes(newStatus) && !selectedStaffId) {
       setValidationError(`Vui lòng chọn nhân viên bán hàng khi chuyển sang trạng thái ${newStatus}`);
       return;
     }
@@ -115,6 +115,7 @@ const StatusChangeModal: React.FC<StatusChangeModalProps> = ({
       if (paymentAmount > 0) {
         const paymentType = getPaymentType(vehicle.status, newStatus);
         const newPayment: PaymentInfo = {
+          id: `PAYMENT_${Date.now()}`,
           amount: paymentAmount,
           date: new Date(),
           type: paymentType,
@@ -124,25 +125,27 @@ const StatusChangeModal: React.FC<StatusChangeModalProps> = ({
         updatedVehicle.payments = [...vehicle.payments, newPayment];
       }
 
-      if (statusRequiresSaleStaff.includes(newStatus) && selectedStaffId) {
+      if (vehicle.status === VehicleStatus.IN_STOCK && statusRequiresSaleStaff.includes(newStatus) && selectedStaffId) {
         const selectedStaff = staffList.find(staff => staff.id === selectedStaffId);
         if (selectedStaff) {
           updatedVehicle.saleStaff = {
             id: selectedStaff.id,
             name: selectedStaff.name,
             team: selectedStaff.team,
-            expectedCommission: (updatedVehicle.salePrice * selectedStaff.commissionRate) / 100
+            expectedCommission: (updatedVehicle.sellPrice * selectedStaff.commissionRate) / 100
           };
         }
       }
     }
     
-    const statusHistoryEntry = createStatusHistory(
-      vehicle.status,
-      newStatus,
-      'User',
-      paymentNotes
-    );
+    const statusHistoryEntry = {
+      id: `STATUS_${Date.now()}`,
+      fromStatus: vehicle.status,
+      toStatus: newStatus,
+      changedAt: new Date(),
+      changedBy: 'User',
+      notes: paymentNotes
+    };
     
     updatedVehicle.statusHistory = [...vehicle.statusHistory, statusHistoryEntry];
     
@@ -154,6 +157,7 @@ const StatusChangeModal: React.FC<StatusChangeModalProps> = ({
       
       if (newStatus === VehicleStatus.SOLD && vehicle.debt > 0) {
         const finalPayment: PaymentInfo = {
+          id: `PAYMENT_FINAL_${Date.now()}`,
           amount: vehicle.debt,
           date: new Date(),
           type: 'FULL_PAYMENT',
@@ -171,6 +175,17 @@ const StatusChangeModal: React.FC<StatusChangeModalProps> = ({
     }
     
     updatedVehicle.debt = calculateDebtOnStatusChange(vehicle, newStatus, paymentAmount);
+
+    if (newStatus === VehicleStatus.SOLD) {
+      updatedVehicle.debt = 0;
+      
+      console.log('Cập nhật trạng thái xe sang SOLD:', {
+        vehicleId: updatedVehicle.id,
+        oldDebt: vehicle.debt,
+        newDebt: updatedVehicle.debt,
+        paymentsMade: updatedVehicle.payments.length
+      });
+    }
     
     console.log('Status Change Update:', {
       from: vehicle.status,
@@ -271,7 +286,7 @@ const StatusChangeModal: React.FC<StatusChangeModalProps> = ({
             </TextField>
           </Grid>
 
-          {statusRequiresSaleStaff.includes(newStatus) && (
+          {statusRequiresSaleStaff.includes(newStatus) && vehicle.status === VehicleStatus.IN_STOCK && (
             <Grid item xs={12}>
               <FormControl fullWidth error={statusRequiresSaleStaff.includes(newStatus) && !selectedStaffId}>
                 <InputLabel id="sale-staff-label">Nhân viên bán hàng</InputLabel>
@@ -364,7 +379,7 @@ const StatusChangeModal: React.FC<StatusChangeModalProps> = ({
                   <Typography variant="body2">Giá nhập: {formatCurrency(vehicle.purchasePrice)}</Typography>
                 </Grid>
                 <Grid item xs={6}>
-                  <Typography variant="body2">Giá bán: {formatCurrency(vehicle.salePrice)}</Typography>
+                  <Typography variant="body2">Giá bán: {formatCurrency(vehicle.sellPrice)}</Typography>
                 </Grid>
                 <Grid item xs={6}>
                   <Typography variant="body2">Tổng đã thanh toán: {formatCurrency(calculateTotalPaid())}</Typography>

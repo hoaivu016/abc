@@ -61,3 +61,10 @@ Vui lòng đọc [DEVELOPMENT.md](DEVELOPMENT.md) trước khi đóng góp
 
 ## Giấy Phép
 [Chỉ định giấy phép] 
+
+
+Lưu Ý Quan Trọng
+Giữ nguyên chức năng hiện tại
+Không thay đổi giao diện người dùng
+Kiểm tra kỹ từng thay đổi
+Sử dụng TypeScript để đảm bảo type safety

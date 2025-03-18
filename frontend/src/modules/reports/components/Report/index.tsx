@@ -207,8 +207,8 @@ const Report: React.FC<ReportProps> = ({
     
     soldVehicles.forEach(vehicle => {
       const totalCost = vehicle.purchasePrice + (vehicle.costs?.reduce((sum, cost) => sum + cost.amount, 0) || 0);
-      if (totalCost > 0 && vehicle.salePrice) {
-        const profit = vehicle.salePrice - totalCost;
+      if (totalCost > 0 && vehicle.sellPrice) {
+        const profit = vehicle.sellPrice - totalCost;
         totalProfitPercentage += (profit / totalCost) * 100;
       }
     });
@@ -253,8 +253,8 @@ const Report: React.FC<ReportProps> = ({
     });
     
     soldVehiclesInSelectedMonth.forEach(vehicle => {
-      if (vehicle.salePrice) {
-        revenue += vehicle.salePrice;
+      if (vehicle.sellPrice) {
+        revenue += vehicle.sellPrice;
         profit += calculateProfit(vehicle);
       }
     });
@@ -619,7 +619,7 @@ const Report: React.FC<ReportProps> = ({
     let monthlyProfit = 0;
     
     soldVehiclesInMonth.forEach(vehicle => {
-      monthlyRevenue += vehicle.salePrice || 0;
+      monthlyRevenue += vehicle.sellPrice || 0;
       monthlyProfit += calculateProfit(vehicle);
     });
     
@@ -740,7 +740,7 @@ const Report: React.FC<ReportProps> = ({
       }
       
       staffMap[id].vehicles += 1;
-      staffMap[id].revenue += vehicle.salePrice || 0;
+      staffMap[id].revenue += vehicle.sellPrice || 0;
       staffMap[id].profit += calculateProfit(vehicle);
     });
     

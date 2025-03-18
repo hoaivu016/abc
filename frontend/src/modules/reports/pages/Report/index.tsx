@@ -176,7 +176,7 @@ const Report: React.FC = () => {
     const soldCount = soldVehicles.length;
     
     // Tổng doanh thu và lợi nhuận
-    const totalRevenue = soldVehicles.reduce((sum: number, v: Vehicle) => sum + v.salePrice, 0);
+    const totalRevenue = soldVehicles.reduce((sum: number, v: Vehicle) => sum + v.sellPrice, 0);
     const totalProfit = soldVehicles.reduce((sum: number, v: Vehicle) => sum + v.profit, 0);
     
     // Lợi nhuận trung bình
@@ -228,7 +228,7 @@ const Report: React.FC = () => {
         if (exportDate.getFullYear() === year) {
           const month = exportDate.getMonth();
           monthlySales[month]++;
-          monthlyRevenue[month] += vehicle.salePrice;
+          monthlyRevenue[month] += vehicle.sellPrice;
           monthlyProfit[month] += vehicle.profit;
         }
       }

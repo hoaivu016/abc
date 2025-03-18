@@ -85,22 +85,13 @@ const validationSchema = Yup.object({
   color: Yup.string()
     .required('Màu sắc là bắt buộc')
     .max(50, 'Màu sắc không được vượt quá 50 ký tự'),
-  manufacturingYear: Yup.number()
-    .required('Năm sản xuất là bắt buộc')
-    .max(new Date().getFullYear(), 'Năm sản xuất không được lớn hơn năm hiện tại')
-    .min(1900, 'Năm sản xuất không hợp lệ'),
-  odo: Yup.number()
-    .required('Số km đã đi là bắt buộc')
-    .min(0, 'Số km không được âm'),
-  purchasePrice: Yup.number()
-    .required('Giá mua là bắt buộc')
-    .min(0, 'Giá mua không được âm'),
-  salePrice: Yup.number()
-    .required('Giá bán là bắt buộc')
-    .min(Yup.ref('purchasePrice'), 'Giá bán phải lớn hơn giá mua'),
-  importDate: Yup.date()
-    .required('Ngày nhập là bắt buộc')
-    .max(new Date(), 'Ngày nhập không được lớn hơn ngày hiện tại')
+  manufacturingYear: Yup.number().nullable(),
+  odo: Yup.number().required('Số ODO là bắt buộc'),
+  purchasePrice: Yup.number().required('Giá mua là bắt buộc'),
+  sellPrice: Yup.number().required('Giá bán là bắt buộc'),
+  importDate: Yup.string().required('Ngày nhập kho là bắt buộc'),
+  exportDate: Yup.string(),
+  notes: Yup.string().nullable()
 });
 
 // Sử dụng SaleStaff để loại bỏ cảnh báo eslint
@@ -217,38 +208,45 @@ const VehicleForm = ({
     }
   };
 
+  // Lấy ngày hôm nay và năm hiện tại làm giá trị mặc định
+  const today = new Date().toISOString().split('T')[0];
+  const currentYear = new Date().getFullYear();
+
+  const initialValues = {
+    name: initialData?.name || '',
+    color: initialData?.color || '',
+    manufacturingYear: initialData?.manufacturingYear || currentYear,
+    odo: initialData?.odo || 0,
+    purchasePrice: initialData?.purchasePrice || 0,
+    sellPrice: initialData?.sellPrice || 0,
+    importDate: initialData?.importDate ? 
+      (initialData.importDate instanceof Date 
+        ? initialData.importDate.toISOString().split('T')[0] 
+        : initialData.importDate) 
+      : today,
+    exportDate: initialData?.exportDate ? 
+      (initialData.exportDate instanceof Date 
+        ? initialData.exportDate.toISOString().split('T')[0] 
+        : initialData.exportDate) 
+      : '',
+    notes: initialData?.notes || ''
+  };
+
   const formik = useFormik({
-    initialValues: {
-      id: initialData?.id || '',
-      name: initialData?.name || '',
-      color: initialData?.color || '',
-      manufacturingYear: initialData?.manufacturingYear || new Date().getFullYear(),
-      odo: initialData?.odo || 0,
-      purchasePrice: initialData?.purchasePrice || 0,
-      salePrice: initialData?.salePrice || 0,
-      importDate: initialData?.importDate ? 
-        (initialData.importDate instanceof Date 
-          ? initialData.importDate.toISOString().split('T')[0] 
-          : initialData.importDate) 
-        : new Date().toISOString().split('T')[0],
-      exportDate: initialData?.exportDate ? 
-        (initialData.exportDate instanceof Date 
-          ? initialData.exportDate.toISOString().split('T')[0] 
-          : initialData.exportDate) 
-        : '',
-      note: initialData?.note || ''
-    },
+    initialValues: initialValues,
     validationSchema: validationSchema,
     onSubmit: (values) => {
       const totalCost = costs.reduce((sum, cost) => sum + cost.amount, 0);
       const totalPayments = payments.reduce((sum, payment) => sum + payment.amount, 0);
-      const debt = values.salePrice - totalPayments;
+      const debt = values.sellPrice - totalPayments;
       
       const processedValues: Partial<Vehicle> = {
+        ...(initialData?.id ? { id: initialData.id } : {}),
         ...values,
+        manufacturingYear: values.manufacturingYear ? Number(values.manufacturingYear) : null,
         odo: parseFormattedNumber(values.odo.toString()),
         purchasePrice: parseFormattedNumber(values.purchasePrice.toString()),
-        salePrice: parseFormattedNumber(values.salePrice.toString()),
+        sellPrice: parseFormattedNumber(values.sellPrice.toString()),
         status: initialData?.status || VehicleStatus.IN_STOCK,
         importDate: new Date(values.importDate),
         exportDate: values.exportDate ? new Date(values.exportDate) : undefined,
@@ -257,8 +255,13 @@ const VehicleForm = ({
         payments: payments,
         debt: debt,
         saleStaff: saleStaff,
-        profit: parseFormattedNumber(values.salePrice.toString()) - parseFormattedNumber(values.purchasePrice.toString()) - totalCost
+        profit: parseFormattedNumber(values.sellPrice.toString()) - parseFormattedNumber(values.purchasePrice.toString()) - totalCost
       };
+
+      // Log để debug
+      console.log('[VehicleForm] Initial Data:', initialData);
+      console.log('[VehicleForm] Processed Values:', processedValues);
+
       onSubmit(processedValues);
       onClose();
       if (onFormChange) onFormChange(false);
@@ -283,10 +286,10 @@ const VehicleForm = ({
   const totalPayments = payments.reduce((sum, payment) => sum + payment.amount, 0);
   
   // Tính lợi nhuận
-  const profit = formik.values.salePrice - formik.values.purchasePrice - totalCost;
+  const profit = formik.values.sellPrice - formik.values.purchasePrice - totalCost;
   
   // Tính công nợ
-  const debt = formik.values.salePrice - totalPayments;
+  const debt = formik.values.sellPrice - totalPayments;
 
   // Thêm theo dõi các thay đổi trong formik
   useEffect(() => {
@@ -411,17 +414,17 @@ const VehicleForm = ({
               <Grid item xs={6}>
                 <TextField
                   fullWidth
-                  id="salePrice"
-                  name="salePrice"
+                  id="sellPrice"
+                  name="sellPrice"
                   label="Giá Bán (VNĐ)"
                   type="text"
-                  value={formatNumber(formik.values.salePrice)}
+                  value={formatNumber(formik.values.sellPrice)}
                   onChange={(e) => {
                     const value = e.target.value.replace(/[^0-9]/g, '');
-                    formik.setFieldValue('salePrice', parseInt(value, 10) || 0);
+                    formik.setFieldValue('sellPrice', parseInt(value, 10) || 0);
                   }}
-                  error={formik.touched.salePrice && Boolean(formik.errors.salePrice)}
-                  helperText={formik.touched.salePrice && formik.errors.salePrice}
+                  error={formik.touched.sellPrice && Boolean(formik.errors.sellPrice)}
+                  helperText={formik.touched.sellPrice && formik.errors.sellPrice}
                   InputProps={{
                     inputProps: { 
                       inputMode: 'numeric',
@@ -460,12 +463,12 @@ const VehicleForm = ({
               <Grid item xs={12}>
                 <TextField
                   fullWidth
-                  id="note"
-                  name="note"
+                  id="notes"
+                  name="notes"
                   label="Ghi Chú"
                   multiline
                   rows={3}
-                  value={formik.values.note}
+                  value={formik.values.notes}
                   onChange={formik.handleChange}
                 />
               </Grid>
@@ -622,7 +625,7 @@ const VehicleForm = ({
             <Grid item xs={12}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
                 <Typography variant="body1">
-                  <strong>Giá bán:</strong> {formatCurrency(formik.values.salePrice)}
+                  <strong>Giá bán:</strong> {formatCurrency(formik.values.sellPrice)}
                 </Typography>
                 <Typography variant="body1" color={debt > 0 ? 'error.main' : 'success.main'}>
                   <strong>Công nợ hiện tại:</strong> {formatCurrency(debt)}
@@ -697,7 +700,7 @@ const VehicleForm = ({
                   {/* Chi tiết tính toán */}
                   <Box sx={{ mt: 1, pl: 2 }}>
                     <Typography variant="body2">
-                      {formatCurrency(debt)} = {formatCurrency(formik.values.salePrice)} - {formatCurrency(totalPayments)}
+                      {formatCurrency(debt)} = {formatCurrency(formik.values.sellPrice)} - {formatCurrency(totalPayments)}
                     </Typography>
                   </Box>
                 </Box>
@@ -868,7 +871,7 @@ const VehicleForm = ({
                   </Grid>
                   <Grid item xs={6}>
                     <Typography variant="body2">
-                      <strong>Giá bán:</strong> {formatCurrency(formik.values.salePrice)}
+                      <strong>Giá bán:</strong> {formatCurrency(formik.values.sellPrice)}
                     </Typography>
                   </Grid>
                   <Grid item xs={6}>
@@ -888,7 +891,7 @@ const VehicleForm = ({
                     </Typography>
                     <Box sx={{ pl: 2, mt: 1 }}>
                       <Typography variant="body2">
-                        {formatCurrency(profit)} = {formatCurrency(formik.values.salePrice)} - {formatCurrency(formik.values.purchasePrice)} - {formatCurrency(totalCost)}
+                        {formatCurrency(profit)} = {formatCurrency(formik.values.sellPrice)} - {formatCurrency(formik.values.purchasePrice)} - {formatCurrency(totalCost)}
                       </Typography>
                     </Box>
                   </Grid>

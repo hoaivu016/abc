@@ -278,7 +278,7 @@ const StaffForm: React.FC<StaffFormProps> = ({
                   <MenuItem value={StaffTeam.SALES_2}>{StaffTeam.SALES_2}</MenuItem>
                   <MenuItem value={StaffTeam.SALES_3}>{StaffTeam.SALES_3}</MenuItem>
                   <MenuItem value={StaffTeam.ACCOUNTING}>{StaffTeam.ACCOUNTING}</MenuItem>
-                  <MenuItem value={StaffTeam.TECHNICAL}>{StaffTeam.TECHNICAL}</MenuItem>
+                  <MenuItem value={StaffTeam.MARKETING}>{StaffTeam.MARKETING}</MenuItem>
                   <MenuItem value={StaffTeam.MANAGEMENT}>{StaffTeam.MANAGEMENT}</MenuItem>
                   <MenuItem value={StaffTeam.OTHER}>{StaffTeam.OTHER}</MenuItem>
                 </Select>

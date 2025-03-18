@@ -8,33 +8,29 @@
  * @param showSymbol - Có hiển thị ký hiệu tiền tệ hay không
  * @returns Chuỗi đã định dạng
  */
-export const formatCurrency = (value: number | undefined | null, showSymbol = true): string => {
-  if (value === undefined || value === null) return '-';
-  
-  const formatter = new Intl.NumberFormat('vi-VN', {
-    style: showSymbol ? 'currency' : 'decimal',
+export const formatCurrency = (value: number): string => {
+  return new Intl.NumberFormat('vi-VN', {
+    style: 'currency',
     currency: 'VND',
     minimumFractionDigits: 0,
     maximumFractionDigits: 0
-  });
-  
-  return formatter.format(value);
+  }).format(value);
 };
 
 /**
- * Định dạng số
- * @param value - Giá trị cần định dạng
+ * Định dạng số thành chuỗi có dấu phân cách hàng nghìn
+ * @param value Số cần định dạng
+ * @param decimalPlaces Số chữ số thập phân (mặc định: 0)
  * @returns Chuỗi đã định dạng
  */
-export const formatNumber = (value: number | undefined | null): string => {
-  if (value === undefined || value === null) return '-';
+export const formatNumber = (value: number, decimalPlaces: number = 0): string => {
+  if (value === null || value === undefined || isNaN(value)) {
+    return '0';
+  }
   
-  const formatter = new Intl.NumberFormat('vi-VN', {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0
-  });
-  
-  return formatter.format(value);
+  return value
+    .toFixed(decimalPlaces)
+    .replace(/\d(?=(\d{3})+(?!\d))/g, '$&.'); // Sử dụng dấu . làm dấu phân cách hàng nghìn
 };
 
 /**
@@ -63,56 +59,44 @@ export const parseFormattedNumber = (formattedValue: string): number => {
 };
 
 /**
- * Định dạng ngày tháng
- * @param date - Ngày cần định dạng (string, Date hoặc undefined)
- * @param format - Định dạng hiển thị, mặc định là 'dd/MM/yyyy'
- * @returns Chuỗi ngày đã định dạng
+ * Định dạng ngày tháng thành chuỗi DD/MM/YYYY
+ * @param date Đối tượng Date cần định dạng
+ * @returns Chuỗi ngày tháng đã định dạng
  */
-export const formatDate = (
-  date: string | Date | undefined | null,
-  format = 'dd/MM/yyyy'
-): string => {
-  if (!date) return '-';
+export const formatDate = (date: Date | null | undefined): string => {
+  if (!date) return '';
   
-  try {
-    const dateObj = typeof date === 'string' ? new Date(date) : date;
-    
-    if (isNaN(dateObj.getTime())) {
-      return '-';
-    }
-    
-    const day = dateObj.getDate().toString().padStart(2, '0');
-    const month = (dateObj.getMonth() + 1).toString().padStart(2, '0');
-    const year = dateObj.getFullYear();
-    
-    // Áp dụng định dạng
-    let formattedDate = format
-      .replace('dd', day)
-      .replace('MM', month)
-      .replace('yyyy', year.toString())
-      .replace('yy', year.toString().slice(-2));
-    
-    return formattedDate;
-  } catch (error) {
-    console.error('Lỗi định dạng ngày:', error);
-    return '-';
-  }
+  const d = new Date(date);
+  if (isNaN(d.getTime())) return '';
+  
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const year = d.getFullYear();
+  
+  return `${day}/${month}/${year}`;
 };
 
 /**
  * Định dạng phần trăm
- * @param value - Giá trị phần trăm
- * @param decimalPlaces - Số chữ số thập phân
+ * @param value Giá trị cần định dạng
+ * @param decimalPlaces Số chữ số thập phân (mặc định: 2)
  * @returns Chuỗi phần trăm đã định dạng
  */
-export const formatPercent = (value: number | undefined | null, decimalPlaces = 1): string => {
-  if (value === undefined || value === null) return '-';
+export const formatPercent = (value: number, decimalPlaces: number = 2): string => {
+  return `${formatNumber(value, decimalPlaces)}%`;
+};
+
+export const parseCurrencyToNumber = (value: string): number => {
+  // Loại bỏ tất cả ký tự không phải số và dấu chấm
+  const cleanValue = value.replace(/[^\d.]/g, '');
   
-  const formatter = new Intl.NumberFormat('vi-VN', {
-    style: 'percent',
-    minimumFractionDigits: decimalPlaces,
-    maximumFractionDigits: decimalPlaces
-  });
+  // Chuyển đổi sang số
+  const numberValue = parseFloat(cleanValue);
   
-  return formatter.format(value / 100);
+  // Trả về 0 nếu không phải số hợp lệ
+  return isNaN(numberValue) ? 0 : numberValue;
+};
+
+export const formatNumberInput = (value: number): string => {
+  return new Intl.NumberFormat('vi-VN').format(value);
 }; 

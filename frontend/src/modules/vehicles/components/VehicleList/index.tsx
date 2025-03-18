@@ -280,12 +280,10 @@ const VehicleList: FC<VehicleListProps> = ({
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [vehicleToDelete, setVehicleToDelete] = useState<Vehicle | null>(null);
 
-  // State cho thông báo
-  const [snackbarProps, setSnackbarProps] = useState({
-    open: false,
-    message: '',
-    severity: 'success'
-  });
+  // Thêm state cho Snackbar
+  const [snackbarOpen, setSnackbarOpen] = useState(false);
+  const [snackbarMessage, setSnackbarMessage] = useState('');
+  const [snackbarSeverity, setSnackbarSeverity] = useState<'success' | 'error'>('success');
 
   // Mở modal thêm chi phí
   const handleOpenCostModal = (vehicle: Vehicle) => {
@@ -329,58 +327,29 @@ const VehicleList: FC<VehicleListProps> = ({
     setVehicleToDelete(null);
   };
 
-  // Xác nhận xóa xe
-  const handleConfirmDelete = () => {
+  // Hàm xử lý đóng Snackbar
+  const handleCloseSnackbar = () => {
+    setSnackbarOpen(false);
+  };
+
+  // Hàm xử lý xác nhận xóa xe
+  const handleConfirmDelete = async () => {
     if (vehicleToDelete) {
       try {
-        console.log('Đang xóa xe với ID:', vehicleToDelete.id);
-        
-        // Thêm thông báo xác nhận để debug
-        setSnackbarProps({
-          open: true,
-          message: `Đang xóa xe ${vehicleToDelete.name}... Vui lòng đợi`,
-          severity: 'info'
-        });
-        
-        // Gọi hàm onDelete từ props
-        onDelete(vehicleToDelete.id);
-        
-        // Đóng modal xác nhận
+        await onDelete(vehicleToDelete.id);
+        setSnackbarMessage('Xóa xe thành công');
+        setSnackbarSeverity('success');
+        setSnackbarOpen(true);
         handleCloseDeleteConfirm();
-        
-        // Hiển thị thông báo thành công
-        setSnackbarProps({
-          open: true,
-          message: `Đã xóa xe ${vehicleToDelete.name} thành công`,
-          severity: 'success'
-        });
-        
-        // Đóng thông báo sau 3 giây
-        setTimeout(() => {
-          setSnackbarProps(prev => ({ ...prev, open: false }));
-        }, 3000);
       } catch (error) {
-        console.error("Lỗi khi xóa xe:", error);
-        
-        // Hiển thị thông báo lỗi
-        setSnackbarProps({
-          open: true,
-          message: `Lỗi khi xóa xe: ${error instanceof Error ? error.message : 'Không xác định'}`,
-          severity: 'error'
-        });
-        
-        // Đóng thông báo sau 3 giây
-        setTimeout(() => {
-          setSnackbarProps(prev => ({ ...prev, open: false }));
-        }, 3000);
+        if (error instanceof Error) {
+          setSnackbarMessage(error.message);
+        } else {
+          setSnackbarMessage('Có lỗi xảy ra khi xóa xe');
+        }
+        setSnackbarSeverity('error');
+        setSnackbarOpen(true);
       }
-    } else {
-      console.error('Không có xe nào được chọn để xóa');
-      setSnackbarProps({
-        open: true,
-        message: 'Lỗi: Không có xe nào được chọn để xóa',
-        severity: 'error'
-      });
     }
   };
 
@@ -738,7 +707,7 @@ const VehicleList: FC<VehicleListProps> = ({
                 </TableCell>
                 <TableCell>
                   <Typography variant="body2" sx={{ fontSize: '1rem' }}>
-                    {formatCurrency(vehicle.salePrice)}
+                    {formatCurrency(vehicle.sellPrice)}
                   </Typography>
                 </TableCell>
                 <TableCell>
@@ -977,7 +946,7 @@ const VehicleList: FC<VehicleListProps> = ({
                   </TableCell>
                   <TableCell>
                     <Typography variant="body2" sx={{ fontSize: '1rem' }}>
-                      {formatCurrency(vehicle.salePrice)}
+                      {formatCurrency(vehicle.sellPrice)}
                     </Typography>
                   </TableCell>
                   <TableCell>
@@ -1175,7 +1144,7 @@ const VehicleList: FC<VehicleListProps> = ({
               
               <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
                 <Typography variant="body1">
-                  <strong>Giá bán:</strong> {formatCurrency(selectedVehicleForDebt.salePrice)}
+                  <strong>Giá bán:</strong> {formatCurrency(selectedVehicleForDebt.sellPrice)}
                 </Typography>
                 <Typography variant="body1" color={selectedVehicleForDebt.debt > 0 ? 'error' : 'success.main'}>
                   <strong>Công nợ hiện tại:</strong> {formatCurrency(selectedVehicleForDebt.debt)}
@@ -1241,7 +1210,7 @@ const VehicleList: FC<VehicleListProps> = ({
                   {/* Chi tiết tính toán */}
                   <Box sx={{ mt: 1, pl: 2 }}>
                     <Typography variant="body2">
-                      {formatCurrency(selectedVehicleForDebt.debt)} = {formatCurrency(selectedVehicleForDebt.salePrice)} - {formatCurrency(selectedVehicleForDebt.payments.reduce((sum, p) => sum + p.amount, 0))}
+                      {formatCurrency(selectedVehicleForDebt.debt)} = {formatCurrency(selectedVehicleForDebt.sellPrice)} - {formatCurrency(selectedVehicleForDebt.payments.reduce((sum, p) => sum + p.amount, 0))}
                     </Typography>
                   </Box>
                 </Box>
@@ -1304,18 +1273,21 @@ const VehicleList: FC<VehicleListProps> = ({
         </DialogActions>
       </Dialog>
 
-      {/* Thông báo */}
-      {snackbarProps.open && (
-        <Snackbar
-          open={snackbarProps.open}
-          autoHideDuration={3000}
-          onClose={() => setSnackbarProps(prev => ({ ...prev, open: false }))}
+      {/* Snackbar thông báo */}
+      <Snackbar
+        open={snackbarOpen}
+        autoHideDuration={3000}
+        onClose={handleCloseSnackbar}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+      >
+        <Alert 
+          onClose={handleCloseSnackbar} 
+          severity={snackbarSeverity}
+          sx={{ width: '100%' }}
         >
-          <Alert onClose={() => setSnackbarProps(prev => ({ ...prev, open: false }))} severity={snackbarProps.severity}>
-            {snackbarProps.message}
-          </Alert>
-        </Snackbar>
-      )}
+          {snackbarMessage}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };

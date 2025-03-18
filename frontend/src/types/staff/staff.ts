@@ -1,26 +1,29 @@
 // Định nghĩa enum cho các trạng thái của nhân viên
 export enum StaffStatus {
-  ACTIVE = 'ACTIVE',
-  INACTIVE = 'INACTIVE',
-  TERMINATED = 'TERMINATED'
+  ACTIVE = 'Đang làm việc',
+  INACTIVE = 'Tạm nghỉ',
+  ON_LEAVE = 'Nghỉ phép',
+  SUSPENDED = 'Đình chỉ',
+  TERMINATED = 'Đã nghỉ việc'
 }
 
 // Định nghĩa enum cho các đội nhóm
 export enum StaffTeam {
-  SALES = 'SALES',
-  SALES_1 = 'SALES_1',
-  SALES_2 = 'SALES_2',
-  SALES_3 = 'SALES_3',
-  MANAGEMENT = 'MANAGEMENT',
-  SUPPORT = 'SUPPORT',
-  TECHNICAL = 'TECHNICAL',
-  OTHER = 'OTHER'
+  SALES_1 = 'Phòng Kinh Doanh 1',
+  SALES_2 = 'Phòng Kinh Doanh 2',
+  SALES_3 = 'Phòng Kinh Doanh 3',
+  MANAGEMENT = 'Ban Quản Lý',
+  MARKETING = 'Marketing',
+  ACCOUNTING = 'Kế Toán',
+  OTHER = 'Khác'
 }
 
 // Định nghĩa enum cho các vai trò
 export enum StaffRole {
-  STAFF = 'STAFF',
-  MANAGER = 'MANAGER'
+  MANAGER = 'Trưởng Phòng',
+  TEAM_LEADER = 'Trưởng Nhóm',
+  STAFF = 'Nhân Viên',
+  INTERN = 'Thực Tập Sinh'
 }
 
 // Interface cho đối tượng nhân viên
@@ -29,13 +32,19 @@ export interface Staff {
   name: string;
   phone: string | null;
   email: string | null;
+  address?: string;
   team: string | null;
   role: string | null;
   status: string | null;
   joinDate: Date;
-  leaveDate: Date | null;
+  terminationDate?: Date | null;
   commissionRate: number | null;
+  salary?: number | null;
   baseSalary: number | null;
+  vehiclesSold?: number;
+  totalCommission?: number;
+  avatar?: string;
+  note?: string;
   created_at: string;
   updated_at: string;
 }
@@ -110,12 +119,12 @@ export interface KpiTarget {
 }
 
 export interface SupportDepartmentBonus {
-  id: string;
-  department: string;
-  bonusMonth: Date | null;
-  bonusAmount: number | null;
-  achievementRate: number | null;
-  notes: string | null;
-  created_at: string;
-  updated_at: string;
+  department: string; // Phòng ban
+  bonusMonth: Date | null; // Tháng thưởng
+  bonusAmount: number | null; // Số tiền thưởng
+  achievementRate: number | null; // Tỷ lệ hoàn thành
+  notes: string | null; // Ghi chú
+  created_at: string; // Ngày tạo
+  updated_at: string; // Ngày cập nhật
+  id: string; // Đặt id ở cuối để khớp với schema DB
 } 

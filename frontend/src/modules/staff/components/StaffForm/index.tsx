@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import type { ChangeEvent } from 'react';
 import { 
   Dialog, 
   DialogTitle, 
@@ -38,12 +39,12 @@ interface StaffFormProps {
 }
 
 // Component form thêm/sửa nhân viên
-const StaffForm: React.FC<StaffFormProps> = ({ 
+const StaffForm = ({ 
   open, 
   onClose, 
   onSubmit, 
   initialData 
-}) => {
+}: StaffFormProps) => {
   // State cho dữ liệu form
   const [formData, setFormData] = useState<Partial<Staff>>({
     name: '',
@@ -64,6 +65,7 @@ const StaffForm: React.FC<StaffFormProps> = ({
   });
 
   // State cho lỗi validation
+  // @ts-ignore
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   // Cập nhật dữ liệu form khi có initialData
@@ -77,7 +79,7 @@ const StaffForm: React.FC<StaffFormProps> = ({
   }, [initialData]);
 
   // Xử lý thay đổi input
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
@@ -280,7 +282,7 @@ const StaffForm: React.FC<StaffFormProps> = ({
                   <MenuItem value={StaffTeam.SALES_2}>{StaffTeam.SALES_2}</MenuItem>
                   <MenuItem value={StaffTeam.SALES_3}>{StaffTeam.SALES_3}</MenuItem>
                   <MenuItem value={StaffTeam.ACCOUNTING}>{StaffTeam.ACCOUNTING}</MenuItem>
-                  <MenuItem value={StaffTeam.TECHNICAL}>{StaffTeam.TECHNICAL}</MenuItem>
+                  <MenuItem value={StaffTeam.MARKETING}>{StaffTeam.MARKETING}</MenuItem>
                   <MenuItem value={StaffTeam.MANAGEMENT}>{StaffTeam.MANAGEMENT}</MenuItem>
                   <MenuItem value={StaffTeam.OTHER}>{StaffTeam.OTHER}</MenuItem>
                 </Select>

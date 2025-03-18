@@ -16,11 +16,23 @@ export interface StatusHistory {
   notes?: string;
 }
 
-// Interface thanh toán
+// Interface thanh toán (phía giao diện người dùng)
 export interface PaymentInfo {
+  id?: string;
   amount: number;
   date: Date;
   type: 'DEPOSIT' | 'BANK_DEPOSIT' | 'OFFSET' | 'FULL_PAYMENT';
+  notes?: string;
+  status?: string;
+}
+
+// Interface StatusChange
+export interface StatusChange {
+  id: string;
+  fromStatus: VehicleStatus;
+  toStatus: VehicleStatus;
+  changedAt: Date;
+  changedBy: string;
   notes?: string;
 }
 
@@ -51,7 +63,7 @@ export interface Vehicle {
   importDate: Date;
   exportDate: Date | null;
   purchasePrice: number;
-  salePrice: number;
+  sellPrice: number;
   profit: number;
   debt: number;
   cost: number;
@@ -60,7 +72,7 @@ export interface Vehicle {
   created_at: string;
   updated_at: string;
   costs: VehicleCost[];
-  payments: VehiclePayment[];
+  payments: PaymentInfo[]; // Thay đổi từ VehiclePayment sang PaymentInfo
   saleStaff?: {
     id: string;
     name: string;
@@ -71,24 +83,50 @@ export interface Vehicle {
 }
 
 export interface VehicleCost {
-  id: string;
-  vehicleId: string;
+  vehicleId: string; // Khớp với vehicle_id trong Supabase
   amount: number;
-  costDate: Date;
+  costDate: Date; // Khớp với cost_date trong Supabase
   description: string | null;
+  created_at: string;
+  updated_at: string;
+  id: string; // Di chuyển ID xuống cuối để khớp với schema DB
+}
+
+// Định nghĩa VehiclePayment cho Supabase (DB)
+export interface VehiclePayment {
+  id: string;
+  vehicleId: string; // Khớp với vehicle_id trong Supabase
+  amount: number;
+  paymentDate: Date; // Khớp với payment_date trong Supabase
+  paymentType: string | null; // Khớp với payment_type trong Supabase
+  notes: string | null;
   created_at: string;
   updated_at: string;
 }
 
-export interface VehiclePayment {
-  id: string;
-  vehicleId: string;
-  amount: number;
-  paymentDate: Date;
-  paymentType: string | null;
-  notes: string | null;
-  created_at: string;
-  updated_at: string;
+// Hàm chuyển đổi từ VehiclePayment sang PaymentInfo
+export function convertToPaymentInfo(payment: VehiclePayment): PaymentInfo {
+  return {
+    id: payment.id,
+    amount: payment.amount,
+    date: payment.paymentDate,
+    type: payment.paymentType as 'DEPOSIT' | 'BANK_DEPOSIT' | 'OFFSET' | 'FULL_PAYMENT',
+    notes: payment.notes || undefined
+  };
+}
+
+// Hàm chuyển đổi từ PaymentInfo sang VehiclePayment
+export function convertToVehiclePayment(payment: PaymentInfo, vehicleId: string): VehiclePayment {
+  return {
+    id: payment.id || `PAYMENT_${Date.now()}`,
+    vehicleId: vehicleId,
+    amount: payment.amount,
+    paymentDate: payment.date,
+    paymentType: payment.type,
+    notes: payment.notes || null,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  };
 }
 
 // Hàm tạo mã xe tự động
@@ -98,28 +136,41 @@ export function generateVehicleId(vehicles: Vehicle[]): string {
   const month = String(now.getMonth() + 1).padStart(2, '0');
   
   // Lấy số thứ tự tiếp theo trong ngày
-  const today = `${day}${month}`;
-  const todayVehicles = vehicles.filter(v => v.id.startsWith(today));
-  const nextNumber = (todayVehicles.length + 1).toString().padStart(2, '0');
+  const prefix = `${day}${month}`;
   
-  // Tạo mã xe với định dạng: DDMM_XX
-  return `${day}${month}_${nextNumber}`;
+  // Lọc xe trong ngày hiện tại và lấy số thứ tự lớn nhất
+  const todayVehicles = vehicles.filter(v => v.id.startsWith(prefix));
+  let maxNumber = 0;
+  
+  // Tìm số thứ tự lớn nhất trong các mã xe hiện tại
+  todayVehicles.forEach(v => {
+    const currentNumber = parseInt(v.id.split('-')[1], 10);
+    if (!isNaN(currentNumber) && currentNumber > maxNumber) {
+      maxNumber = currentNumber;
+    }
+  });
+  
+  // Tạo số thứ tự mới
+  const nextNumber = (maxNumber + 1).toString().padStart(2, '0');
+  
+  // Tạo mã xe với định dạng: DDMM-XX (ngày, tháng, số thứ tự)
+  return `${prefix}-${nextNumber}`;
 }
 
 // Hàm tính lợi nhuận
 export function calculateProfit(vehicle: Partial<Vehicle>): number {
   const purchasePrice = vehicle.purchasePrice || 0;
-  const salePrice = vehicle.salePrice || 0;
+  const sellPrice = vehicle.sellPrice || 0;
   const cost = vehicle.cost || 0;
   const debt = vehicle.debt || 0;
   
   // Tính lợi nhuận: Giá bán - Giá mua - Chi phí
-  const profit = salePrice - purchasePrice - cost;
+  const profit = sellPrice - purchasePrice - cost;
   
   // Log để kiểm tra việc tính toán
   console.log('Profit Calculation:', {
     purchasePrice,
-    salePrice,
+    sellPrice,
     cost,
     debt,
     profit
@@ -276,7 +327,7 @@ export function getStatusBorderColor(status: VehicleStatus): string {
 
 // Hàm tính toán công nợ
 export function calculateDebt(
-  salePrice: number, 
+  sellPrice: number, 
   payments: PaymentInfo[] | undefined
 ): number {
   // Kiểm tra nếu payments là undefined thì gán mảng rỗng
@@ -307,11 +358,11 @@ export function calculateDebt(
   
   // Tính công nợ: Giá bán - Tổng các khoản đã thanh toán
   // Không cho phép công nợ âm
-  const debt = Math.max(0, salePrice - totalPaid);
+  const debt = Math.max(0, sellPrice - totalPaid);
   
   // Log chi tiết để kiểm tra việc tính toán
   console.log('Debt Calculation (Chi tiết):', {
-    salePrice,
+    sellPrice,
     totalPaid,
     depositAmount,
     bankDepositAmount,
@@ -375,7 +426,7 @@ export function calculateDebtOnStatusChange(
   }
   
   // Tính toán công nợ dựa trên tất cả các khoản thanh toán
-  const debt = calculateDebt(vehicle.salePrice, allPayments);
+  const debt = calculateDebt(vehicle.sellPrice, allPayments);
   
   // Chi tiết tính toán công nợ theo loại thanh toán
   const depositAmount = allPayments
@@ -402,7 +453,7 @@ export function calculateDebtOnStatusChange(
     vehicleId: vehicle.id,
     currentStatus: vehicle.status,
     newStatus,
-    salePrice: vehicle.salePrice,
+    sellPrice: vehicle.sellPrice,
     totalPaid,
     depositAmount,
     bankDepositAmount,
@@ -457,4 +508,26 @@ export function createStatusHistory(
     changedBy,
     notes
   };
+}
+
+export interface Staff {
+  id: string;
+  name: string;
+  phone: string;
+  email: string;
+  team: string;
+  role: string;
+  status: string;
+  joinDate: Date;
+  leaveDate?: Date | null;
+  commissionRate: number;
+  baseSalary: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface SyncAction {
+  type: 'vehicle_add' | 'vehicle_update' | 'vehicle_delete' | 'staff_add' | 'staff_update' | 'staff_delete' | 'kpi_update' | 'bonus_update';
+  data: any;
+  timestamp?: string;
 } 

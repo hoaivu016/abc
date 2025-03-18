@@ -10,6 +10,11 @@
 - Cập nhật thông tin xe
 - Xóa xe khỏi kho
 - Xem chi tiết thông tin xe
+- thay đổi trạng thái xe
+- Tính công nợ
+- tính thời gian lưu kho
+- tính chi phí xe
+- thêm nhân viên bán hàng
 
 ### 2.2 Thông Tin Xe Cần Lưu Trữ
 - Mã xe (ID)(tạo tự động)
@@ -23,19 +28,19 @@
 - Menu chính:
   + Báo cáo (active mặc định khi truy cập)
   + Danh sách xe
+  + Admin
 - Thanh điều hướng thông minh:
   + Hiển thị vị trí hiện tại
   + Quick links đến các chức năng thường dùng
 - Breadcrumbs để dễ dàng quay lại
 - Luồng điều hướng:
   1. Truy cập ứng dụng -> Hiển thị trang Báo cáo
-  2. Từ Báo cáo -> Có thể điều hướng đến Danh sách xe
+  2. Từ Báo cáo -> Có thể điều hướng đến Danh sách xe -> Admin
   3. Breadcrumbs luôn hiển thị để dễ dàng quay lại
 
 ### 2.4 Quản Lý Kho
 - Theo dõi số lượng xe trong kho
 - Báo cáo tồn kho
-- Thống kê theo các tiêu chí
 
 ### 2.5 Người Dùng và Phân Quyền
 1. Vai trò và quyền hạn:
@@ -50,20 +55,16 @@
      + Xem và cập nhật giá xe
      + Quản lý chi phí và công nợ
      + Quản lý thanh toán và đặt cọc
+     + Thêm nhân viên bán hàng
 
    - Nhân viên:
      + Xem danh sách xe
-     + Thêm xe mới
-     + Cập nhật thông tin cơ bản xe
-     + Xem báo cáo cơ bản
-     + Quản lý trạng thái xe
-     + Ghi nhận giao dịch
+     
 
 2. Chức năng chung:
    - Đăng nhập/Đăng xuất
    - Đổi mật khẩu
    - Cập nhật thông tin cá nhân
-   - Nhận thông báo theo phân quyền
 
 3. Giới hạn truy cập:
    - Phân quyền theo chức năng
@@ -77,12 +78,12 @@
 
 #### Thông Tin Hiển Thị
 1. Thông tin cơ bản:
-   - Mã xe: Định dạng DDMM_XX (DD: ngày, MM: tháng, XX: số thứ tự) 
+   - Mã xe: Định dạng DDMM-XX (DD: ngày, MM: tháng, XX: số thứ tự) 
    - Tên xe: Text, tối đa 100 ký tự
    - Màu sắc: Text, tối đa 50 ký tự
    - Năm sản xuất: Number (YYYY)
    - Nhân viên bán:
-     + Tên nhân viên bán
+     + Mã nhân viên bán hàng
    
 
 2. Thông tin vận hành:
@@ -97,9 +98,10 @@
 3. Thông tin tài chính:
    - Chi phí: Number, format tiền VNĐ
    - Công nợ: Number, format tiền VNĐ
+   - Lợi nhuận: Number, format tiền VNĐ
    - Giá mua: Number, format tiền VNĐ
    - Giá bán: Number, format tiền VNĐ
-   - Lợi nhuận: Number, format tiền VNĐ
+  
 
 4. Thông tin thời gian:
    - Thời gian lưu kho:
@@ -115,6 +117,9 @@
    - Icons cho các actions:
      + Sửa thông tin xe
      + Xóa xe
+   - chọn trên bảng 
+     + thay đổi trạng thái xe
+     + thêm chi phí 
 
 #### Tính Năng
 1. Sắp xếp:
@@ -147,6 +152,7 @@
    - Mã xe: Tự động theo format DDMM_XX
    - Thời gian lưu kho: Tính từ ngày nhập
    - Lợi nhuận: Tự động tính (Giá bán - Giá mua - Chi phí)
+   - Công nợ: Tự động tính (Giá bán - số tiền đã thanh toán)
 
 ### 3.3 Sửa Xe
 
@@ -157,7 +163,7 @@
    - Thời gian lưu kho (tự động tính)
    - Lợi nhuận hiện tại
 
-2. Lịch sử:
+2. Lịch sử thanh toán:
    - Lịch sử chi phí phát sinh
    - Lịch sử thanh toán
 
@@ -177,7 +183,6 @@
    - Log lại thao tác xóa
 
 ### 3.4 Trạng Thái Xe
-
 #### Định Nghĩa Trạng Thái
 1. Trong kho:
    - Màu: #28a745
@@ -188,13 +193,13 @@
 2. Đặt cọc:
    - Màu: #4DA1A9
    - Điều kiện: Đã nhận tiền cọc trực tiếp
-   - Cho phép: Nhập tiền cọc, chi phí
+   - Cho phép: Nhập tiền cọc, chi phí, thêm nhân viên bán hàng
    - Có thể chuyển sang: Đặt cọc ngân hàng, Đã bán, Trong kho(xoá lịch sử thanh toán, đặt lại công nợ vè 0)
    - cập nhật công nợ = giá bán - số tiền thanh toán
 3. Đặt cọc ngân hàng:
    - Màu: #79D7BE
    - Điều kiện: Đã nhận tiền cọc qua ngân hàng
-   - bắt buộc: Nhập tiền cọc, chi phí
+   - Cho phép: Nhập tiền cọc, chi phí, thêm nhân viên bán hàng
    - Có thể chuyển sang: Đặt cọc, Đóng đối ứng, Đã bán, Trong kho(xoá lịch sử thanh toán, đặt lại công nợ vè 0)
    - cập nhật công nợ = giá bán - số tiền thanh toán
 
@@ -216,6 +221,7 @@
 1. Từ "Trong kho" có thể chuyển sang:
    - "Đặt cọc" hoặc "Đặt cọc ngân hàng":
      + Yêu cầu nhập số tiền đặt cọc
+     + Thêm nhân viên bán hàng
      + Tự động tính công nợ = Giá bán - Tiền đặt cọc
    - "Đã bán":
      + Yêu cầu xác nhận giao xe

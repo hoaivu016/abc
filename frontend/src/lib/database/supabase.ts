@@ -9,8 +9,19 @@ if (!supabaseUrl || !supabaseAnonKey) {
   console.error('Thiếu biến môi trường REACT_APP_SUPABASE_URL hoặc REACT_APP_SUPABASE_ANON_KEY');
 }
 
-// Tạo client Supabase
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// Tạo client Supabase với cấu hình headers
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    autoRefreshToken: true,
+    persistSession: true
+  },
+  global: {
+    headers: {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json'
+    }
+  }
+});
 
 // Hàm kiểm tra kết nối
 export const checkSupabaseConnection = async () => {
