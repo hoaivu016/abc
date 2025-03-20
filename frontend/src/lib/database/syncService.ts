@@ -32,6 +32,10 @@ export const getPendingSync = (): (SyncAction & { timestamp: string })[] => {
 
 // Hàm merge dữ liệu từ server với dữ liệu local
 export const mergeData = <T extends { id: string }>(localData: T[], serverData: T[]): T[] => {
+  console.log('===== BẮT ĐẦU MERGE DỮ LIỆU =====');
+  console.log('Dữ liệu local:', JSON.stringify(localData, null, 2));
+  console.log('Dữ liệu server:', JSON.stringify(serverData, null, 2));
+  
   // Tạo một map để truy cập nhanh các item theo ID
   const localMap = new Map<string, T>();
   localData.forEach(item => localMap.set(item.id, item));
@@ -46,9 +50,11 @@ export const mergeData = <T extends { id: string }>(localData: T[], serverData: 
     
     if (localItem) {
       // Nếu item tồn tại ở cả local và server, giữ lại item local vì có thể đã được chỉnh sửa
+      console.log(`Merge item ${serverItem.id}: Giữ dữ liệu local`);
       mergedData.push(localItem);
     } else {
       // Nếu item chỉ tồn tại ở server, thêm vào kết quả
+      console.log(`Merge item ${serverItem.id}: Thêm dữ liệu server`);
       mergedData.push(serverItem);
     }
     
@@ -58,9 +64,14 @@ export const mergeData = <T extends { id: string }>(localData: T[], serverData: 
   // Thêm các item chỉ tồn tại ở local (item mới chưa được đồng bộ)
   localData.forEach(localItem => {
     if (!processedIds.has(localItem.id)) {
+      console.log(`Merge item ${localItem.id}: Thêm dữ liệu local chưa đồng bộ`);
       mergedData.push(localItem);
     }
   });
+  
+  console.log('===== KẾT THÚC MERGE DỮ LIỆU =====');
+  console.log('Số lượng dữ liệu sau merge:', mergedData.length);
+  console.log('Chi tiết dữ liệu sau merge:', JSON.stringify(mergedData, null, 2));
   
   return mergedData;
 };
@@ -79,7 +90,7 @@ export const syncPendingActions = async (): Promise<boolean> => {
       try {
         switch (item.type) {
           case 'vehicle_add':
-            // Tạo đối tượng xe phù hợp với cấu trúc bảng Supabase
+          case 'vehicle_update':
             const vehicleData = {
               id: item.data.id,
               name: item.data.name,
@@ -99,78 +110,24 @@ export const syncPendingActions = async (): Promise<boolean> => {
               debt: item.data.debt,
               profit: item.data.profit,
               storage_time: item.data.storageTime,
-              created_at: item.data.created_at,
-              updated_at: item.data.updated_at
+              created_at: item.data.created_at || new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+              sales_staff_id: item.data.saleStaffId
             };
             
-            // Thêm xe vào bảng vehicles
-            await supabase.from('vehicles').insert([vehicleData]);
+            console.log('Đang đồng bộ xe:', vehicleData);
             
-            // Thêm chi phí nếu có
-            if (item.data.costs && item.data.costs.length > 0) {
-              for (const cost of item.data.costs) {
-                const costData = {
-                  vehicle_id: item.data.id,
-                  amount: cost.amount,
-                  cost_date: cost.costDate instanceof Date 
-                    ? cost.costDate.toISOString() 
-                    : cost.costDate,
-                  description: cost.description,
-                  created_at: cost.created_at || new Date().toISOString(),
-                  updated_at: cost.updated_at || new Date().toISOString(),
-                  id: cost.id
-                };
-                
-                await supabase.from('vehicle_costs').insert([costData]);
-              }
+            const { data, error } = await supabase
+              .from('vehicles')
+              .upsert([vehicleData], { 
+                onConflict: 'id',
+                returning: 'minimal'
+              });
+            
+            if (error) {
+              console.error('Lỗi đồng bộ xe:', error);
+              throw error;
             }
-            
-            // Thêm thanh toán nếu có
-            if (item.data.payments && item.data.payments.length > 0) {
-              for (const payment of item.data.payments) {
-                const paymentData = {
-                  id: payment.id || `PAYMENT_${Date.now()}`,
-                  vehicle_id: item.data.id,
-                  amount: payment.amount,
-                  payment_date: payment.date instanceof Date 
-                    ? payment.date.toISOString() 
-                    : payment.date,
-                  payment_type: payment.type,
-                  notes: payment.notes,
-                  created_at: new Date().toISOString(),
-                  updated_at: new Date().toISOString()
-                };
-                
-                await supabase.from('vehicle_payments').insert([paymentData]);
-              }
-            }
-            break;
-          case 'vehicle_update':
-            // Tương tự như thêm xe, tạo đối tượng phù hợp với cấu trúc bảng Supabase
-            const updatedVehicleData = {
-              id: item.data.id,
-              name: item.data.name,
-              color: item.data.color,
-              manufacturing_year: item.data.manufacturingYear,
-              odo: item.data.odo,
-              purchase_price: item.data.purchasePrice,
-              sell_price: item.data.sellPrice,
-              import_date: item.data.importDate instanceof Date 
-                ? item.data.importDate.toISOString() 
-                : item.data.importDate,
-              export_date: item.data.exportDate instanceof Date 
-                ? item.data.exportDate?.toISOString() 
-                : item.data.exportDate,
-              status: item.data.status,
-              cost: item.data.cost,
-              debt: item.data.debt,
-              profit: item.data.profit,
-              storage_time: item.data.storageTime,
-              updated_at: new Date().toISOString()
-            };
-            
-            // Cập nhật xe
-            await supabase.from('vehicles').update(updatedVehicleData).eq('id', item.data.id);
             break;
           case 'vehicle_delete':
             await supabase.from('vehicles').delete().eq('id', item.data.id);
@@ -207,8 +164,8 @@ export const syncPendingActions = async (): Promise<boolean> => {
             break;
         }
       } catch (error) {
-        console.error(`Lỗi khi đồng bộ ${item.type}:`, error);
-        // Nếu có lỗi, tiếp tục với action tiếp theo
+        console.error(`Lỗi chi tiết khi đồng bộ ${item.type}:`, JSON.stringify(error, null, 2));
+        // Ghi log chi tiết lỗi
         continue;
       }
     }
@@ -217,7 +174,7 @@ export const syncPendingActions = async (): Promise<boolean> => {
     localStorage.removeItem('pendingSync');
     return true;
   } catch (error) {
-    console.error('Lỗi khi đồng bộ dữ liệu:', error);
+    console.error('Lỗi chi tiết khi đồng bộ dữ liệu:', JSON.stringify(error, null, 2));
     return false;
   }
 };
@@ -225,7 +182,7 @@ export const syncPendingActions = async (): Promise<boolean> => {
 // Hàm tải dữ liệu từ Supabase
 export const loadVehiclesFromSupabase = async (): Promise<Vehicle[]> => {
   try {
-    console.log('Bắt đầu tải dữ liệu xe từ Supabase');
+    console.log('===== BẮT ĐẦU TẢI XE TỪ SUPABASE =====');
     
     // Lấy danh sách xe
     const { data: vehiclesData, error: vehiclesError } = await supabase
@@ -237,6 +194,9 @@ export const loadVehiclesFromSupabase = async (): Promise<Vehicle[]> => {
       console.error('Lỗi khi tải dữ liệu xe:', vehiclesError);
       throw vehiclesError;
     }
+
+    console.log('Số lượng xe từ Supabase:', vehiclesData?.length || 0);
+    console.log('Chi tiết xe từ Supabase:', JSON.stringify(vehiclesData, null, 2));
 
     // Lấy chi phí của xe
     const { data: costsData, error: costsError } = await supabase
@@ -372,16 +332,24 @@ export const loadVehiclesFromSupabase = async (): Promise<Vehicle[]> => {
     const localVehicles = savedVehicles ? JSON.parse(savedVehicles) : [];
     console.log('Dữ liệu local:', localVehicles.length, 'xe');
     
-    // Merge dữ liệu
+    // Thêm log chi tiết về merge dữ liệu
+    console.log('Dữ liệu local trước khi merge:', localVehicles.length, 'xe');
+    console.log('Dữ liệu server trước khi merge:', vehicles.length, 'xe');
+    
     const mergedData = mergeData<Vehicle>(localVehicles, vehicles);
+    
+    console.log('===== KẾT THÚC TẢI XE =====');
     console.log('Dữ liệu sau khi merge:', mergedData.length, 'xe');
+    console.log('Chi tiết xe sau merge:', JSON.stringify(mergedData, null, 2));
     
     // Lưu lại vào localStorage
     localStorage.setItem('vehicles', JSON.stringify(mergedData));
     
     return mergedData;
   } catch (error) {
-    console.error('Lỗi khi tải xe từ Supabase:', error);
+    console.error('===== LỖI NGHIÊM TRỌNG KHI TẢI XE =====');
+    console.error('Chi tiết lỗi:', JSON.stringify(error, null, 2));
+    
     const savedVehicles = localStorage.getItem('vehicles');
     return savedVehicles ? JSON.parse(savedVehicles) : [];
   }
@@ -967,4 +935,10 @@ window.addEventListener('online', async () => {
 
 window.addEventListener('offline', () => {
   console.log('Mất kết nối mạng - Các thao tác sẽ được lưu để đồng bộ sau');
-}); 
+});
+
+// Hàm chuẩn hóa ID xe
+const normalizeVehicleId = (id: string): string => {
+  // Loại bỏ các ký tự không mong muốn
+  return id.replace(/[^a-zA-Z0-9-]/g, '').toLowerCase();
+}; 
