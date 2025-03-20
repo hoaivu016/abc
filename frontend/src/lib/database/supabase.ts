@@ -1,12 +1,22 @@
 import { createClient } from '@supabase/supabase-js';
 
 // Lấy thông tin kết nối từ biến môi trường
-const supabaseUrl = process.env.REACT_APP_SUPABASE_URL || '';
-const supabaseAnonKey = process.env.REACT_APP_SUPABASE_ANON_KEY || '';
+const supabaseUrl = 
+  process.env.REACT_APP_SUPABASE_URL || 
+  process.env.NEXT_PUBLIC_SUPABASE_URL || 
+  '';
+
+const supabaseAnonKey = 
+  process.env.REACT_APP_SUPABASE_ANON_KEY || 
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 
+  '';
 
 // Kiểm tra xem các biến môi trường có tồn tại không
 if (!supabaseUrl || !supabaseAnonKey) {
-  console.error('Thiếu biến môi trường Supabase');
+  console.error('Thiếu biến môi trường Supabase', {
+    supabaseUrl,
+    supabaseAnonKey: supabaseAnonKey ? 'Đã cung cấp' : 'Chưa cung cấp'
+  });
 }
 
 // Tạo client Supabase với cấu hình nâng cao
