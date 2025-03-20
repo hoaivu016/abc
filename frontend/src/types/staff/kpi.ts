@@ -1,74 +1,32 @@
-import { Staff, StaffTeam } from './staff';
-import { Vehicle } from '../vehicle/vehicle';
-
 export enum KpiTargetType {
-  SALES = 'SALES',           // KPI cho nhân viên kinh doanh
-  DEPARTMENT = 'DEPARTMENT', // KPI cho phòng ban
-  MANAGEMENT = 'MANAGEMENT'  // KPI cho quản lý
+  SALES = 'SALES',
+  DEPARTMENT = 'DEPARTMENT',
+  MANAGEMENT = 'MANAGEMENT'
 }
 
 export interface KpiTarget {
-  id: string;
-  staffId: string;
-  type: KpiTargetType;
-  targetValue: number;
-  actualValue: number;
-  bonusAmount: number;
-  isActive: boolean;
+  id?: string;
+  staff_id: string;
   month: number;
   year: number;
-  targetName?: string;
+  type: KpiTargetType;
+  target_vehicles: number;
+  sold_vehicles: number;
+  bonus_per_vehicle: number;
+  total_bonus: number;
+}
+
+export interface KpiTargetConfig {
+  id?: string;
+  name: string;
+  description?: string;
 }
 
 export interface SupportDepartmentBonus {
-  id: string;
-  department: string;
-  bonusMonth: Date | null;
-  bonusAmount: number | null;
-  achievementRate: number | null;
-  notes: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface StaffKpiData {
-  staff: Staff;
-  hasKpi: boolean;
-  kpiData: {
-    targetValue: number;
-    actualValue: number;
-    completion: number;
-    bonusPerUnit: number;
-    bonus: number;
-  };
-}
-
-export interface KPITableProps {
-  departmentKPIs: KpiTarget[];
-  salesStaffKPIs: KpiTarget[];
-  managementKPIs: KpiTarget[];
-  staffList: any[];
-  vehicles: any[];
-  allSalesStaffWithKpis: {
-    staff: any;
-    hasKpi: boolean;
-    kpiData: {
-      targetValue: number;
-      actualValue: number;
-      completion: number;
-      bonusPerUnit: number;
-      bonus: number;
-    };
-  }[];
-}
-
-export interface SalesStaffPerformance extends Staff {
-  vehiclesSold: number;
-  revenue: number;
-  commission: number;
-}
-
-export interface SalesStaffReportProps {
-  staffPerformance: any[];
-  kpiTargets: KpiTarget[];
+  id?: string;
+  staff_id: string;
+  month: number;
+  year: number;
+  bonus_amount: number;
+  description?: string;
 } 
