@@ -12,26 +12,45 @@
   "routes": [
     {
       "src": "/static/(.*)",
+      "headers": {
+        "Cache-Control": "public, max-age=31536000, immutable"
+      },
       "dest": "/frontend/build/static/$1"
     },
     {
       "src": "/favicon.ico",
+      "headers": {
+        "Cache-Control": "public, max-age=31536000, immutable"
+      },
       "dest": "/frontend/build/favicon.ico"
     },
     {
       "src": "/manifest.json",
+      "headers": {
+        "Content-Type": "application/json",
+        "Cache-Control": "public, max-age=31536000, immutable"
+      },
       "dest": "/frontend/build/manifest.json"
     },
     {
       "src": "/logo192.png",
+      "headers": {
+        "Cache-Control": "public, max-age=31536000, immutable"
+      },
       "dest": "/frontend/build/logo192.png"
     },
     {
       "src": "/logo512.png",
+      "headers": {
+        "Cache-Control": "public, max-age=31536000, immutable"
+      },
       "dest": "/frontend/build/logo512.png"
     },
     {
       "src": "/(.*)",
+      "headers": {
+        "Cache-Control": "no-cache, no-store, must-revalidate"
+      },
       "dest": "/frontend/build/index.html"
     }
   ]
