@@ -1,19 +1,23 @@
 import { useState, useCallback } from 'react';
-import { supabase, signInAnonymously, checkAndRestoreSession } from '../lib/database/supabase';
+import { supabase, handleAuthError } from '../lib/database/supabase';
 import { Staff, StaffStatus, StaffTeam, StaffRole } from '../types/staff/staff';
+import type { Session } from '@supabase/supabase-js';
 
 export const useStaffManagement = () => {
   const [staffList, setStaffList] = useState<Staff[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Hàm đăng nhập và xác thực
-  const ensureAuthentication = async () => {
+  // Hàm đảm bảo xác thực
+  const ensureAuthentication = async (): Promise<Session | null> => {
     try {
-      const session = await checkAndRestoreSession();
-      if (!session) {
-        await signInAnonymously();
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) {
+        const { data: authData, error } = await supabase.auth.signInAnonymously();
+        if (error) throw error;
+        return authData.session;
       }
+      return sessionData.session;
     } catch (authError) {
       console.error('Lỗi xác thực:', authError);
       throw authError;
@@ -26,18 +30,22 @@ export const useStaffManagement = () => {
     setError(null);
 
     try {
-      // Đảm bảo đã xác thực
-      await ensureAuthentication();
-
       const { data, error } = await supabase
         .from('staff')
         .select('*')
         .order('created_at', { ascending: false });
 
       if (error) {
+        // Thử xử lý lỗi xác thực
+        const handled = await handleAuthError(error);
+        if (handled) {
+          // Thử lại sau khi xử lý lỗi
+          return getAllStaff();
+        }
+
         console.error('Lỗi lấy danh sách nhân viên:', error);
         setError(error.message);
-        throw error;
+        return [];
       }
 
       setStaffList(data || []);
@@ -57,9 +65,6 @@ export const useStaffManagement = () => {
     setError(null);
 
     try {
-      // Đảm bảo đã xác thực
-      await ensureAuthentication();
-
       // Chuẩn bị dữ liệu nhân viên
       const newStaff = {
         id: Date.now().toString(),
@@ -82,9 +87,16 @@ export const useStaffManagement = () => {
         .select();
 
       if (error) {
+        // Thử xử lý lỗi xác thực
+        const handled = await handleAuthError(error);
+        if (handled) {
+          // Thử lại sau khi xử lý lỗi
+          return addStaff(staffData);
+        }
+
         console.error('Lỗi thêm nhân viên:', error);
         setError(error.message);
-        throw error;
+        return null;
       }
 
       // Cập nhật danh sách nhân viên
