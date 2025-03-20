@@ -144,7 +144,7 @@ export function generateVehicleId(vehicles: Vehicle[]): string {
   
   // Tìm số thứ tự lớn nhất trong các mã xe hiện tại
   todayVehicles.forEach(v => {
-    const currentNumber = parseInt(v.id.split('-')[1], 10);
+    const currentNumber = parseInt(v.id.substring(4), 10);
     if (!isNaN(currentNumber) && currentNumber > maxNumber) {
       maxNumber = currentNumber;
     }
@@ -153,8 +153,8 @@ export function generateVehicleId(vehicles: Vehicle[]): string {
   // Tạo số thứ tự mới
   const nextNumber = (maxNumber + 1).toString().padStart(2, '0');
   
-  // Tạo mã xe với định dạng: DDMM-XX (ngày, tháng, số thứ tự)
-  return `${prefix}-${nextNumber}`;
+  // Tạo mã xe với định dạng: DDMMXX (ngày, tháng, số thứ tự)
+  return `${prefix}${nextNumber}`;
 }
 
 // Hàm tính lợi nhuận

@@ -31,7 +31,19 @@ const TabNavigation: React.FC<TabNavigationProps> = ({
         value={currentTab.toString()}
         onChange={handleMobileChange}
         showLabels
-        sx={{ width: '100%', borderRadius: 1 }}
+        sx={{ 
+          width: '100%', 
+          borderRadius: 1,
+          '& .MuiBottomNavigationAction-root': {
+            minWidth: 'auto',
+            padding: '6px 12px',
+            flexDirection: 'column',
+            '& .MuiBottomNavigationAction-label': {
+              fontSize: '0.75rem',
+              marginTop: 1
+            }
+          }
+        }}
       >
         {visibleTabs.map(tabId => {
           const Icon = AdminIcons[tabId];
@@ -41,6 +53,11 @@ const TabNavigation: React.FC<TabNavigationProps> = ({
               label={TAB_LABELS[tabId]}
               value={tabId.toString()}
               icon={<Icon />}
+              sx={{
+                '& svg': {
+                  fontSize: 24
+                }
+              }}
             />
           );
         })}
@@ -55,15 +72,37 @@ const TabNavigation: React.FC<TabNavigationProps> = ({
       indicatorColor="primary"
       textColor="primary"
       variant="fullWidth"
-      sx={{ borderBottom: 1, borderColor: 'divider' }}
+      sx={{ 
+        borderBottom: 1, 
+        borderColor: 'divider',
+        '& .MuiTab-root': {
+          display: 'flex',
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 1,
+          textTransform: 'none',
+          fontWeight: 600
+        }
+      }}
     >
-      {visibleTabs.map(tabId => (
-        <Tab
-          key={tabId}
-          label={TAB_LABELS[tabId]}
-          value={tabId}
-        />
-      ))}
+      {visibleTabs.map(tabId => {
+        const Icon = AdminIcons[tabId];
+        return (
+          <Tab
+            key={tabId}
+            value={tabId}
+            label={TAB_LABELS[tabId]}
+            icon={<Icon />}
+            iconPosition="start"
+            sx={{
+              '& svg': {
+                fontSize: 20,
+                mr: 1
+              }
+            }}
+          />
+        );
+      })}
     </Tabs>
   );
 };

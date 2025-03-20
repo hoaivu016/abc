@@ -1,12 +1,14 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import { BrowserRouter } from 'react-router-dom';
-import { LocalizationProvider } from '@mui/x-date-pickers';
-import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
-import { SnackbarProvider } from 'notistack';
-import { vi } from 'date-fns/locale';
-import App from './App';
 import './index.css';
+import App from './App';
+import reportWebVitals from './reportWebVitals';
+import { Provider } from 'react-redux';
+import { store } from './store';
+import { BrowserRouter } from 'react-router-dom';
+import { SnackbarProvider } from 'notistack';
+import '@fontsource/mulish';
+import './utils/chartConfig';
 
 const root = ReactDOM.createRoot(
   document.getElementById('root') as HTMLElement
@@ -14,19 +16,14 @@ const root = ReactDOM.createRoot(
 
 root.render(
   <React.StrictMode>
-    <BrowserRouter>
-      <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={vi}>
-        <SnackbarProvider 
-          maxSnack={3}
-          anchorOrigin={{
-            vertical: 'top',
-            horizontal: 'right',
-          }}
-          autoHideDuration={3000}
-        >
+    <Provider store={store}>
+      <BrowserRouter>
+        <SnackbarProvider maxSnack={3}>
           <App />
         </SnackbarProvider>
-      </LocalizationProvider>
-    </BrowserRouter>
+      </BrowserRouter>
+    </Provider>
   </React.StrictMode>
-); 
+);
+
+reportWebVitals(); 

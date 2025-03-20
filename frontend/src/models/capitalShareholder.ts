@@ -4,7 +4,7 @@ export interface CapitalShareholder {
   shareholder_name: string;
   investment_amount: number;
   share_percentage: number;
-  note: string | null;
+  note?: string | null;
   created_at: string;
   updated_at: string;
 }

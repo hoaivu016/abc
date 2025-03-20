@@ -31,29 +31,7 @@ import StorageTimeChart from '../../components/StorageTimeChart';
 import DownloadIcon from '@mui/icons-material/Download';
 import PrintIcon from '@mui/icons-material/Print';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  BarElement,
-  Title,
-  Tooltip,
-  Legend,
-} from 'chart.js';
-
-// Đăng ký các component cho ChartJS
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  BarElement,
-  Title,
-  Tooltip,
-  Legend
-);
+import { Chart as ChartJS } from 'chart.js';
 
 interface TabPanelProps {
   children?: React.ReactNode;

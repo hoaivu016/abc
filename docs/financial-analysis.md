@@ -74,10 +74,6 @@ Tab phân tích tài chính là công cụ giúp theo dõi và phân tích hiệ
 - Báo cáo chi tiết theo cổ đông
 - Báo cáo dòng tiền
 
-### 5.2. Định dạng xuất dữ liệu
-- Excel
-- PDF
-- CSV
 
 ## 6. Quyền truy cập và bảo mật
 - Phân quyền xem/chỉnh sửa thông tin

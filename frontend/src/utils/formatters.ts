@@ -8,13 +8,17 @@
  * @param showSymbol - Có hiển thị ký hiệu tiền tệ hay không
  * @returns Chuỗi đã định dạng
  */
-export const formatCurrency = (value: number): string => {
-  return new Intl.NumberFormat('vi-VN', {
-    style: 'currency',
+export const formatCurrency = (value: number | undefined | null, showSymbol = true): string => {
+  if (value === undefined || value === null) return '-';
+  
+  const formatter = new Intl.NumberFormat('vi-VN', {
+    style: showSymbol ? 'currency' : 'decimal',
     currency: 'VND',
     minimumFractionDigits: 0,
     maximumFractionDigits: 0
-  }).format(value);
+  });
+  
+  return formatter.format(value);
 };
 
 /**
@@ -84,19 +88,4 @@ export const formatDate = (date: Date | null | undefined): string => {
  */
 export const formatPercent = (value: number, decimalPlaces: number = 2): string => {
   return `${formatNumber(value, decimalPlaces)}%`;
-};
-
-export const parseCurrencyToNumber = (value: string): number => {
-  // Loại bỏ tất cả ký tự không phải số và dấu chấm
-  const cleanValue = value.replace(/[^\d.]/g, '');
-  
-  // Chuyển đổi sang số
-  const numberValue = parseFloat(cleanValue);
-  
-  // Trả về 0 nếu không phải số hợp lệ
-  return isNaN(numberValue) ? 0 : numberValue;
-};
-
-export const formatNumberInput = (value: number): string => {
-  return new Intl.NumberFormat('vi-VN').format(value);
 }; 

@@ -1,5 +1,4 @@
 import React from 'react';
-import DashboardIcon from '@mui/icons-material/Dashboard';
 import SettingsIcon from '@mui/icons-material/Settings';
 import PeopleIcon from '@mui/icons-material/People';
 import AssessmentIcon from '@mui/icons-material/Assessment';
@@ -9,7 +8,6 @@ import { AdminTabsEnum } from '../../types/admin.enums';
 export const AdminIcons: Record<AdminTabsEnum, React.FC> = {
   [AdminTabsEnum.STAFF]: PeopleIcon,
   [AdminTabsEnum.CONFIG]: SettingsIcon,
-  [AdminTabsEnum.KPI]: DashboardIcon,
   [AdminTabsEnum.PERMISSIONS]: SecurityIcon,
   [AdminTabsEnum.REPORTS]: AssessmentIcon
 }; 

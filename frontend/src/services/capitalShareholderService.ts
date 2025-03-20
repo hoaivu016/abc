@@ -1,49 +1,67 @@
-import { supabase } from '../utils/supabase';
+import { supabase } from '../lib/supabase';
 import { CapitalShareholder, CapitalShareholderInput } from '../models/capitalShareholder';
 
-const TABLE_NAME = 'capital_shareholders';
-
 export const capitalShareholderService = {
-  async getAllByCapitalId(capitalId: string): Promise<CapitalShareholder[]> {
-    const { data, error } = await supabase
-      .from(TABLE_NAME)
-      .select('*')
-      .eq('capital_id', capitalId)
-      .order('created_at', { ascending: false });
+  async getShareholdersByCapitalId(capitalId: string): Promise<CapitalShareholder[]> {
+    try {
+      const { data, error } = await supabase
+        .from('capital_shareholders')
+        .select('*')
+        .eq('capital_id', capitalId)
+        .order('created_at', { ascending: true });
 
-    if (error) throw error;
-    return data || [];
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      console.error('Error getting shareholders:', error);
+      throw error;
+    }
   },
 
-  async create(input: CapitalShareholderInput): Promise<CapitalShareholder> {
-    const { data, error } = await supabase
-      .from(TABLE_NAME)
-      .insert([input])
-      .select()
-      .single();
+  async createShareholder(shareholder: CapitalShareholderInput): Promise<CapitalShareholder> {
+    try {
+      const { data, error } = await supabase
+        .from('capital_shareholders')
+        .insert(shareholder)
+        .select()
+        .single();
 
-    if (error) throw error;
-    return data;
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      console.error('Error creating shareholder:', error);
+      throw error;
+    }
   },
 
-  async update(id: string, input: Partial<CapitalShareholderInput>): Promise<CapitalShareholder> {
-    const { data, error } = await supabase
-      .from(TABLE_NAME)
-      .update(input)
-      .eq('id', id)
-      .select()
-      .single();
+  async updateShareholder(id: string, shareholder: Partial<CapitalShareholderInput>): Promise<CapitalShareholder> {
+    try {
+      const { data, error } = await supabase
+        .from('capital_shareholders')
+        .update(shareholder)
+        .eq('id', id)
+        .select()
+        .single();
 
-    if (error) throw error;
-    return data;
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      console.error('Error updating shareholder:', error);
+      throw error;
+    }
   },
 
-  async delete(id: string): Promise<void> {
-    const { error } = await supabase
-      .from(TABLE_NAME)
-      .delete()
-      .eq('id', id);
+  async deleteShareholder(id: string): Promise<void> {
+    try {
+      const { error } = await supabase
+        .from('capital_shareholders')
+        .delete()
+        .eq('id', id);
 
-    if (error) throw error;
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error deleting shareholder:', error);
+      throw error;
+    }
   }
 }; 

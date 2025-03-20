@@ -17,9 +17,7 @@ import {
 } from '@mui/material';
 import { formatCurrency } from '../../../../../utils/formatters';
 import { Pie } from 'react-chartjs-2';
-import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
-
-ChartJS.register(ArcElement, Tooltip, Legend);
+import { Chart as ChartJS } from 'chart.js';
 
 interface PaymentAnalysis {
   type: string;

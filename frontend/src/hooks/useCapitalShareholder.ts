@@ -1,78 +1,69 @@
-import { useState, useCallback } from 'react';
+import { useState } from 'react';
+import { useSnackbar } from 'notistack';
 import { CapitalShareholder, CapitalShareholderInput } from '../models/capitalShareholder';
 import { capitalShareholderService } from '../services/capitalShareholderService';
-import { useSnackbar } from 'notistack';
 
-interface UseCapitalShareholderReturn {
-  shareholders: CapitalShareholder[];
-  loading: boolean;
-  fetchShareholders: (capitalId: string) => Promise<void>;
-  createShareholder: (input: CapitalShareholderInput) => Promise<void>;
-  updateShareholder: (id: string, input: Partial<CapitalShareholderInput>) => Promise<void>;
-  deleteShareholder: (id: string) => Promise<void>;
-}
-
-export function useCapitalShareholder(): UseCapitalShareholderReturn {
+export const useCapitalShareholder = (capitalId: string) => {
   const [shareholders, setShareholders] = useState<CapitalShareholder[]>([]);
   const [loading, setLoading] = useState(false);
   const { enqueueSnackbar } = useSnackbar();
 
-  const fetchShareholders = useCallback(async (capitalId: string) => {
+  const fetchShareholders = async () => {
     try {
       setLoading(true);
-      const data = await capitalShareholderService.getAllByCapitalId(capitalId);
+      const data = await capitalShareholderService.getShareholdersByCapitalId(capitalId);
       setShareholders(data);
     } catch (error) {
       console.error('Error fetching shareholders:', error);
-      enqueueSnackbar('Không thể tải dữ liệu cổ đông', { variant: 'error' });
+      enqueueSnackbar('Lỗi khi tải danh sách cổ đông', { variant: 'error' });
     } finally {
       setLoading(false);
     }
-  }, [enqueueSnackbar]);
+  };
 
-  const createShareholder = useCallback(async (input: CapitalShareholderInput) => {
+  const createShareholder = async (shareholder: CapitalShareholderInput) => {
     try {
       setLoading(true);
-      await capitalShareholderService.create(input);
-      enqueueSnackbar('Thêm thông tin cổ đông thành công', { variant: 'success' });
-      await fetchShareholders(input.capital_id);
+      await capitalShareholderService.createShareholder(shareholder);
+      enqueueSnackbar('Thêm cổ đông thành công', { variant: 'success' });
+      await fetchShareholders();
     } catch (error) {
       console.error('Error creating shareholder:', error);
-      enqueueSnackbar('Không thể thêm thông tin cổ đông', { variant: 'error' });
+      enqueueSnackbar('Lỗi khi thêm cổ đông', { variant: 'error' });
     } finally {
       setLoading(false);
     }
-  }, [enqueueSnackbar, fetchShareholders]);
+  };
 
-  const updateShareholder = useCallback(async (id: string, input: Partial<CapitalShareholderInput>) => {
+  const updateShareholder = async (id: string, shareholder: Partial<CapitalShareholderInput>) => {
     try {
       setLoading(true);
-      await capitalShareholderService.update(id, input);
+      await capitalShareholderService.updateShareholder(id, shareholder);
       enqueueSnackbar('Cập nhật thông tin cổ đông thành công', { variant: 'success' });
-      if (input.capital_id) {
-        await fetchShareholders(input.capital_id);
+      if (shareholder.capital_id === capitalId) {
+        await fetchShareholders();
       }
     } catch (error) {
       console.error('Error updating shareholder:', error);
-      enqueueSnackbar('Không thể cập nhật thông tin cổ đông', { variant: 'error' });
+      enqueueSnackbar('Lỗi khi cập nhật thông tin cổ đông', { variant: 'error' });
     } finally {
       setLoading(false);
     }
-  }, [enqueueSnackbar, fetchShareholders]);
+  };
 
-  const deleteShareholder = useCallback(async (id: string) => {
+  const deleteShareholder = async (id: string) => {
     try {
       setLoading(true);
-      await capitalShareholderService.delete(id);
-      enqueueSnackbar('Xóa thông tin cổ đông thành công', { variant: 'success' });
-      setShareholders(prev => prev.filter(s => s.id !== id));
+      await capitalShareholderService.deleteShareholder(id);
+      setShareholders(shareholders.filter(s => s.id !== id));
+      enqueueSnackbar('Xóa cổ đông thành công', { variant: 'success' });
     } catch (error) {
       console.error('Error deleting shareholder:', error);
-      enqueueSnackbar('Không thể xóa thông tin cổ đông', { variant: 'error' });
+      enqueueSnackbar('Lỗi khi xóa cổ đông', { variant: 'error' });
     } finally {
       setLoading(false);
     }
-  }, [enqueueSnackbar]);
+  };
 
   return {
     shareholders,
@@ -82,4 +73,4 @@ export function useCapitalShareholder(): UseCapitalShareholderReturn {
     updateShareholder,
     deleteShareholder
   };
-} 
+}; 

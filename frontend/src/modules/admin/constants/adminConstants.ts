@@ -7,15 +7,13 @@ export const DEFAULT_TAB = AdminTabsEnum.STAFF;
 export const TAB_LABELS: Record<AdminTabsEnum, string> = {
   [AdminTabsEnum.STAFF]: 'Quản lý nhân viên',
   [AdminTabsEnum.CONFIG]: 'Cấu hình hoa hồng',
-  [AdminTabsEnum.KPI]: 'KPI & Thưởng',
   [AdminTabsEnum.PERMISSIONS]: 'Phân quyền người dùng',
   [AdminTabsEnum.REPORTS]: 'Báo cáo quản trị'
 };
 
 export const MOBILE_VISIBLE_TABS: AdminTabsEnum[] = [
   AdminTabsEnum.STAFF,
-  AdminTabsEnum.CONFIG,
-  AdminTabsEnum.KPI
+  AdminTabsEnum.CONFIG
 ];
 
 export const TAB_CONFIGS: TabConfig[] = Object.values(AdminTabsEnum)

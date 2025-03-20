@@ -1,14 +1,16 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
-import { KpiTarget } from '../../types/staff/kpi';
+import { KpiTarget, SupportDepartmentBonus } from '../../types/staff/kpi';
 
 interface KpiState {
   kpiList: KpiTarget[];
+  supportBonusList: SupportDepartmentBonus[];
   loading: boolean;
   error: string | null;
 }
 
 const initialState: KpiState = {
   kpiList: [],
+  supportBonusList: [],
   loading: false,
   error: null
 };
@@ -20,17 +22,8 @@ const kpiSlice = createSlice({
     setKpiList: (state, action: PayloadAction<KpiTarget[]>) => {
       state.kpiList = action.payload;
     },
-    addKpi: (state, action: PayloadAction<KpiTarget>) => {
-      state.kpiList.push(action.payload);
-    },
-    updateKpi: (state, action: PayloadAction<KpiTarget>) => {
-      const index = state.kpiList.findIndex(kpi => kpi.id === action.payload.id);
-      if (index !== -1) {
-        state.kpiList[index] = action.payload;
-      }
-    },
-    deleteKpi: (state, action: PayloadAction<string>) => {
-      state.kpiList = state.kpiList.filter(kpi => kpi.id !== action.payload);
+    setSupportBonusList: (state, action: PayloadAction<SupportDepartmentBonus[]>) => {
+      state.supportBonusList = action.payload;
     },
     setLoading: (state, action: PayloadAction<boolean>) => {
       state.loading = action.payload;
@@ -43,11 +36,9 @@ const kpiSlice = createSlice({
 
 export const { 
   setKpiList, 
-  addKpi, 
-  updateKpi, 
-  deleteKpi,
-  setLoading,
-  setError
+  setSupportBonusList, 
+  setLoading, 
+  setError 
 } = kpiSlice.actions;
 
 export default kpiSlice.reducer; 

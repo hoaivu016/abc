@@ -19,18 +19,22 @@ interface ShareholderDialogProps {
   onSubmit: (values: CapitalShareholderInput) => void;
   initialValues?: CapitalShareholder;
   totalCapital: number;
+  capitalId: string;
 }
 
 const validationSchema = Yup.object().shape({
   shareholder_name: Yup.string().required('Vui lòng nhập tên cổ đông'),
   investment_amount: Yup.number()
-    .required('Vui lòng nhập số tiền đầu tư')
-    .min(0, 'Số tiền đầu tư phải lớn hơn 0'),
+    .required('Vui lòng nhập số vốn góp')
+    .min(0, 'Số vốn góp phải lớn hơn 0')
+    .test('max-investment', 'Số vốn góp không được vượt quá tổng vốn', function (value) {
+      return !value || value <= this.parent.totalCapital;
+    }),
   share_percentage: Yup.number()
     .required('Vui lòng nhập tỷ lệ góp vốn')
     .min(0, 'Tỷ lệ góp vốn phải lớn hơn 0')
     .max(100, 'Tỷ lệ góp vốn không được vượt quá 100%'),
-  note: Yup.string(),
+  note: Yup.string().nullable(),
 });
 
 export const ShareholderDialog: React.FC<ShareholderDialogProps> = ({
@@ -39,6 +43,7 @@ export const ShareholderDialog: React.FC<ShareholderDialogProps> = ({
   onSubmit,
   initialValues,
   totalCapital,
+  capitalId,
 }) => {
   const handleSubmit = (values: CapitalShareholderInput) => {
     onSubmit(values);
@@ -59,12 +64,12 @@ export const ShareholderDialog: React.FC<ShareholderDialogProps> = ({
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle>
-        {initialValues ? 'Chỉnh sửa thông tin cổ đông' : 'Thêm thông tin cổ đông mới'}
+        {initialValues ? 'Chỉnh sửa thông tin cổ đông' : 'Thêm cổ đông mới'}
       </DialogTitle>
       <Formik
         initialValues={
           initialValues || {
-            capital_id: '',
+            capital_id: capitalId,
             shareholder_name: '',
             investment_amount: 0,
             share_percentage: 0,
@@ -94,7 +99,7 @@ export const ShareholderDialog: React.FC<ShareholderDialogProps> = ({
                   <TextField
                     fullWidth
                     name="investment_amount"
-                    label="Số tiền đầu tư"
+                    label="Vốn góp ban đầu"
                     value={formatCurrency(values.investment_amount)}
                     onChange={handleNumberChange(handleChange)}
                     onBlur={handleBlur}

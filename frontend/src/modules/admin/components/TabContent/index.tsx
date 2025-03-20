@@ -4,7 +4,7 @@ import { AdminTabsEnum } from '../../types/admin.enums';
 import type { AdminProps } from '../../types/admin.types';
 import StaffTab from '../AdminTabs/StaffTab';
 import CommissionConfig from '../CommissionConfig';
-import Dashboard from '../Dashboard';
+import KPITable from '../KPITable';
 
 interface TabContentProps extends AdminProps {
   currentTab: AdminTabsEnum;
@@ -18,10 +18,6 @@ const TabContent: React.FC<TabContentProps> = ({
   onEditStaff,
   onDeleteStaff,
   showSnackbar,
-  kpiList,
-  onSaveKpi,
-  supportBonusList,
-  onSaveSupportBonus,
   selectedMonth,
   selectedYear,
   onDateChange
@@ -47,25 +43,9 @@ const TabContent: React.FC<TabContentProps> = ({
         <CommissionConfig
           staffList={staffList}
           vehicles={vehicles}
-          onSaveKpi={onSaveKpi}
-          onSaveSupportBonus={onSaveSupportBonus}
-          kpiList={kpiList}
-          supportBonusList={supportBonusList}
           selectedMonth={selectedMonth}
           selectedYear={selectedYear}
           onDateChange={onDateChange}
-        />
-      );
-
-    case AdminTabsEnum.KPI:
-      return (
-        <Dashboard
-          staffList={staffList}
-          vehicles={vehicles}
-          selectedMonth={selectedMonth}
-          selectedYear={selectedYear}
-          onDateChange={onDateChange}
-          kpiList={kpiList}
         />
       );
 
@@ -78,9 +58,12 @@ const TabContent: React.FC<TabContentProps> = ({
 
     case AdminTabsEnum.REPORTS:
       return (
-        <Typography variant="h6">
-          Tính năng báo cáo đang được phát triển
-        </Typography>
+        <KPITable
+          staffList={staffList}
+          vehicles={vehicles}
+          selectedMonth={selectedMonth}
+          selectedYear={selectedYear}
+        />
       );
 
     default:

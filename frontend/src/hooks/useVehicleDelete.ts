@@ -1,18 +1,17 @@
 import { useState } from 'react';
 import { Vehicle } from '../types/vehicles/vehicle';
-import { SupabaseClient } from '@supabase/supabase-js';
+import { createClient } from '@supabase/supabase-js';
 
 interface UseVehicleDeleteProps {
-  supabase: SupabaseClient;
+  supabase: ReturnType<typeof createClient>;
   onSuccess?: () => void;
   onError?: (error: Error) => void;
 }
 
 interface UseVehicleDeleteReturn {
+  deleteVehicle: (vehicleId: string) => Promise<void>;
   isDeleting: boolean;
   error: Error | null;
-  deleteVehicle: (vehicleId: string) => Promise<void>;
-  resetError: () => void;
 }
 
 export const useVehicleDelete = ({ 
@@ -24,111 +23,65 @@ export const useVehicleDelete = ({
   const [error, setError] = useState<Error | null>(null);
 
   const deleteVehicle = async (vehicleId: string) => {
+    if (!vehicleId) {
+      throw new Error('ID xe không hợp lệ');
+    }
+
     try {
       setIsDeleting(true);
       setError(null);
 
-      // 1. Kiểm tra xem xe có tồn tại không và lấy thông tin liên quan
-      const { data: vehicle, error: checkError } = await supabase
+      console.log('Bắt đầu xóa xe:', vehicleId);
+
+      // 1. Xóa xe (các bảng liên quan sẽ tự động xóa nhờ ON DELETE CASCADE)
+      const { error: deleteError } = await supabase
         .from('vehicles')
-        .select('id')
-        .eq('id', vehicleId)
-        .single();
+        .delete()
+        .eq('id', vehicleId);
 
-      if (checkError) {
-        throw new Error('Không tìm thấy xe cần xóa');
+      if (deleteError) {
+        console.error('Lỗi khi xóa xe:', deleteError);
+        throw new Error(`Không thể xóa xe: ${deleteError.message}`);
       }
 
-      // 2. Xóa tất cả dữ liệu liên quan đến xe
+      console.log('Xóa xe thành công');
+
+      // 2. Cập nhật local storage
       try {
-        // Xóa chi phí
-        await supabase
-          .from('costs')
-          .delete()
-          .eq('vehicle_id', vehicleId)
-          .throwOnError();
+        const localVehicles = JSON.parse(localStorage.getItem('vehicles') || '[]');
+        const updatedVehicles = localVehicles.filter((v: Vehicle) => v.id !== vehicleId);
+        localStorage.setItem('vehicles', JSON.stringify(updatedVehicles));
 
-        // Xóa thanh toán
-        await supabase
-          .from('payments')
-          .delete()
-          .eq('vehicle_id', vehicleId)
-          .throwOnError();
+        // Lưu log xóa xe để đồng bộ sau này nếu mất kết nối
+        const syncLog = {
+          action: 'DELETE',
+          table: 'vehicles',
+          record_id: vehicleId,
+          timestamp: new Date().toISOString()
+        };
+        const existingLogs = JSON.parse(localStorage.getItem('sync_logs') || '[]');
+        existingLogs.push(syncLog);
+        localStorage.setItem('sync_logs', JSON.stringify(existingLogs));
 
-        // Xóa lịch sử trạng thái xe (nếu có)
-        await supabase
-          .from('vehicle_status_history')
-          .delete()
-          .eq('vehicle_id', vehicleId)
-          .throwOnError();
-
-        // Xóa ghi chú xe (nếu có)
-        await supabase
-          .from('vehicle_notes')
-          .delete()
-          .eq('vehicle_id', vehicleId)
-          .throwOnError();
-
-        // Xóa tài liệu xe (nếu có)
-        await supabase
-          .from('vehicle_documents')
-          .delete()
-          .eq('vehicle_id', vehicleId)
-          .throwOnError();
-
-        // Xóa các bản ghi liên quan khác (nếu có)
-        await supabase
-          .from('vehicle_maintenance')
-          .delete()
-          .eq('vehicle_id', vehicleId)
-          .throwOnError();
-
-        // 3. Cuối cùng xóa xe
-        const { error: deleteError } = await supabase
-          .from('vehicles')
-          .delete()
-          .eq('id', vehicleId);
-
-        if (deleteError) {
-          throw new Error('Không thể xóa xe. Vui lòng thử lại sau.');
-        }
-
-        // 4. Xóa khỏi localStorage
-        try {
-          const localVehicles = JSON.parse(localStorage.getItem('vehicles') || '[]');
-          localStorage.setItem(
-            'vehicles', 
-            JSON.stringify(localVehicles.filter((v: Vehicle) => v.id !== vehicleId))
-          );
-        } catch (e) {
-          console.error('Lỗi khi xóa xe khỏi localStorage:', e);
-        }
-
-        // 5. Gọi callback thành công
-        onSuccess?.();
-
-      } catch (err) {
-        console.error('Lỗi khi xóa dữ liệu liên quan:', err);
-        throw new Error('Có lỗi xảy ra khi xóa dữ liệu liên quan đến xe');
+        console.log('Đã cập nhật local storage');
+      } catch (e) {
+        console.error('Lỗi khi cập nhật cache:', e);
       }
 
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Có lỗi xảy ra khi xóa xe';
-      const error = new Error(errorMessage);
-      setError(error);
-      onError?.(error);
-      throw error;
-    } finally {
       setIsDeleting(false);
+      onSuccess?.();
+    } catch (error) {
+      console.error('Lỗi chung:', error);
+      setIsDeleting(false);
+      setError(error instanceof Error ? error : new Error('Lỗi không xác định'));
+      onError?.(error instanceof Error ? error : new Error('Lỗi không xác định'));
+      throw error;
     }
   };
 
-  const resetError = () => setError(null);
-
   return {
-    isDeleting,
-    error,
     deleteVehicle,
-    resetError
+    isDeleting,
+    error
   };
 }; 

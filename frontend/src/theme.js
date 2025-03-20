@@ -250,11 +250,17 @@ const theme = createTheme({
       styleOverrides: {
         root: {
           minHeight: 48,
+          backgroundColor: '#f8f9fa',
+          borderRadius: 8,
         },
         indicator: {
           height: 3,
           backgroundColor: 'rgb(60, 133, 62)',
+          borderRadius: 2,
         },
+        flexContainer: {
+          justifyContent: 'space-around',
+        }
       },
     },
     MuiTab: {
@@ -264,11 +270,18 @@ const theme = createTheme({
           textTransform: 'none',
           padding: '12px 16px',
           minHeight: 48,
+          transition: 'all 0.2s ease',
+          '&:hover': {
+            backgroundColor: 'rgba(60, 133, 62, 0.1)',
+          },
           '&.Mui-selected': {
             fontWeight: 700,
             color: 'rgb(60, 133, 62)',
           },
         },
+        iconWrapper: {
+          marginRight: 8,
+        }
       },
     },
     MuiDialog: {
@@ -323,6 +336,32 @@ const theme = createTheme({
           },
         },
       },
+    },
+    BottomNavigation: {
+      styleOverrides: {
+        root: {
+          backgroundColor: '#f8f9fa',
+          borderRadius: 8,
+          boxShadow: '0 2px 5px rgba(0,0,0,0.1)',
+        }
+      }
+    },
+    BottomNavigationAction: {
+      styleOverrides: {
+        root: {
+          transition: 'all 0.2s ease',
+          '&:hover': {
+            backgroundColor: 'rgba(60, 133, 62, 0.1)',
+          },
+          '&.Mui-selected': {
+            color: 'rgb(60, 133, 62)',
+          }
+        },
+        label: {
+          fontSize: '0.75rem',
+          marginTop: 4,
+        }
+      }
     },
   },
 });
