@@ -6,21 +6,15 @@ const supabaseAnonKey = process.env.REACT_APP_SUPABASE_ANON_KEY || '';
 
 // Kiểm tra xem các biến môi trường có tồn tại không
 if (!supabaseUrl || !supabaseAnonKey) {
-  console.error('Thiếu biến môi trường REACT_APP_SUPABASE_URL hoặc REACT_APP_SUPABASE_ANON_KEY');
-  // Thêm cảnh báo chi tiết
-  if (!supabaseUrl) {
-    console.warn('URL Supabase không được cung cấp. Vui lòng kiểm tra biến môi trường REACT_APP_SUPABASE_URL');
-  }
-  if (!supabaseAnonKey) {
-    console.warn('Khóa ẩn danh Supabase không được cung cấp. Vui lòng kiểm tra biến môi trường REACT_APP_SUPABASE_ANON_KEY');
-  }
+  console.error('Thiếu biến môi trường Supabase');
 }
 
-// Tạo client Supabase với cấu hình headers và xử lý lỗi
+// Tạo client Supabase với cấu hình nâng cao
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     autoRefreshToken: true,
-    persistSession: true
+    persistSession: true,
+    storageKey: 'supabase-auth-token'
   },
   global: {
     headers: {
@@ -28,7 +22,6 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
       'Content-Type': 'application/json'
     }
   },
-  // Thêm cấu hình retry và timeout
   realtime: {
     params: {
       eventsPerSecond: 10
@@ -36,48 +29,67 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   }
 });
 
-// Hàm kiểm tra kết nối nâng cao
+// Hàm đăng nhập ẩn danh
+export const signInAnonymously = async () => {
+  try {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: 'anonymous@example.com',
+      password: 'anonymousPassword123!'
+    });
+
+    if (error) {
+      console.error('Lỗi đăng nhập ẩn danh:', error);
+      throw error;
+    }
+
+    return data;
+  } catch (error) {
+    console.error('Lỗi không xác định khi đăng nhập:', error);
+    throw error;
+  }
+};
+
+// Hàm kiểm tra và khôi phục phiên làm việc
+export const checkAndRestoreSession = async () => {
+  try {
+    // Thử lấy phiên hiện tại
+    const { data: { session }, error } = await supabase.auth.getSession();
+
+    if (error) {
+      console.error('Lỗi lấy phiên:', error);
+      
+      // Nếu không có phiên, thử đăng nhập ẩn danh
+      if (error.message.includes('No session')) {
+        await signInAnonymously();
+      }
+    }
+
+    return session;
+  } catch (error) {
+    console.error('Lỗi khôi phục phiên:', error);
+    throw error;
+  }
+};
+
+// Hàm kiểm tra kết nối Supabase
 export const checkSupabaseConnection = async () => {
   try {
-    console.log('===== KIỂM TRA KẾT NỐI SUPABASE =====');
-    console.log('URL:', supabaseUrl);
-    console.log('Anon Key:', supabaseAnonKey ? 'Đã cung cấp' : 'CHƯA CUNG CẤP');
-    
-    // Thử lấy phiên làm việc
-    const { data, error } = await supabase.auth.getSession();
-    
-    if (error) {
-      console.error('Lỗi kết nối Supabase:', error);
-      
-      // Xử lý các loại lỗi cụ thể
-      if (error.message.includes('Invalid token')) {
-        console.warn('Token không hợp lệ. Vui lòng đăng nhập lại.');
-      }
-      
-      if (error.message.includes('Network')) {
-        console.warn('Lỗi mạng. Vui lòng kiểm tra kết nối internet.');
-      }
-      
-      return false;
-    }
+    await checkAndRestoreSession();
     
     // Thử truy vấn một bảng để kiểm tra kết nối
-    const { data: testData, error: queryError } = await supabase
-      .from('vehicles')
+    const { data, error } = await supabase
+      .from('staff')
       .select('id')
       .limit(1);
     
-    if (queryError) {
-      console.error('Lỗi truy vấn thử nghiệm:', queryError);
+    if (error) {
+      console.error('Lỗi kết nối Supabase:', error);
       return false;
     }
     
-    console.log('Kết nối Supabase thành công');
-    console.log('===== KẾT THÚC KIỂM TRA KẾT NỐI =====');
-    
     return true;
   } catch (error) {
-    console.error('Lỗi không xác định khi kiểm tra kết nối Supabase:', error);
+    console.error('Lỗi không xác định khi kiểm tra kết nối:', error);
     return false;
   }
 };
