@@ -53,7 +53,7 @@ const CommissionConfig: React.FC<CommissionConfigProps> = ({
     .filter(staff => staff.team === 'Kinh doanh')
     .map(calculateCommission);
 
-  return (
+    return (
     <Box sx={{ width: '100%', overflowX: 'auto' }}>
       <Typography variant="h6" sx={{ mb: 2 }}>
         Bảng Hoa Hồng Nhân Viên Kinh Doanh
@@ -61,16 +61,16 @@ const CommissionConfig: React.FC<CommissionConfigProps> = ({
       </Typography>
       <TableContainer component={Paper} elevation={3}>
         <Table sx={{ minWidth: 650 }}>
-          <TableHead>
-            <TableRow>
-              <TableCell>Nhân viên</TableCell>
+            <TableHead>
+              <TableRow>
+                <TableCell>Nhân viên</TableCell>
               <TableCell align="right">Số xe bán</TableCell>
               <TableCell align="right">Tổng doanh số</TableCell>
               <TableCell align="right">Tỷ lệ hoa hồng (%)</TableCell>
               <TableCell align="right">Hoa hồng</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
+              </TableRow>
+            </TableHead>
+            <TableBody>
             {commissionData.map((row) => (
               <TableRow
                 key={row.staffName}
@@ -82,18 +82,18 @@ const CommissionConfig: React.FC<CommissionConfigProps> = ({
                 <TableCell align="right">{row.vehiclesSold}</TableCell>
                 <TableCell align="right">
                   {formatCurrency(row.totalSales)}
-                </TableCell>
+                  </TableCell>
                 <TableCell align="right">
                   {row.commissionRate.toFixed(2)}%
-                </TableCell>
+                  </TableCell>
                 <TableCell align="right">
                   {formatCurrency(row.commission)}
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
     </Box>
   );
 };

@@ -67,6 +67,9 @@ import {
 import { FinancialAnalysis } from './modules/admin/components';
 // Import hook
 import { useVehicleDelete } from './hooks/useVehicleDelete';
+import { checkSupabaseConnection } from './lib/database/supabase';
+// Import component quản lý tài khoản
+import AccountManagement from './modules/accounts/components/AccountManagement';
 
 // Định nghĩa interface cho các tab
 interface TabPanelProps {
@@ -206,6 +209,29 @@ function App() {
   const initialDate = new Date();
   const [globalMonth, setGlobalMonth] = useState<number>(initialDate.getMonth() + 1);
   const [globalYear, setGlobalYear] = useState<number>(initialDate.getFullYear());
+
+  const [connectionStatus, setConnectionStatus] = useState<'checking' | 'connected' | 'disconnected'>('checking');
+  const [connectionError, setConnectionError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const testSupabaseConnection = async () => {
+      try {
+        const isConnected = await checkSupabaseConnection();
+        
+        if (isConnected) {
+          setConnectionStatus('connected');
+        } else {
+          setConnectionStatus('disconnected');
+          setConnectionError('Không thể kết nối đến Supabase. Vui lòng kiểm tra cài đặt.');
+        }
+      } catch (error) {
+        setConnectionStatus('disconnected');
+        setConnectionError(`Lỗi kết nối: ${error instanceof Error ? error.message : 'Lỗi không xác định'}`);
+      }
+    };
+
+    testSupabaseConnection();
+  }, []);
 
   // Lưu danh sách xe vào localStorage mỗi khi thay đổi
   useEffect(() => {
@@ -1884,6 +1910,30 @@ function App() {
     }));
   };
 
+  // Hiển thị thông báo kết nối
+  const renderConnectionStatus = () => {
+    switch (connectionStatus) {
+      case 'checking':
+        return (
+          <div className="connection-status checking">
+            <p>Đang kiểm tra kết nối...</p>
+          </div>
+        );
+      case 'connected':
+        return (
+          <div className="connection-status connected">
+            <p>Kết nối Supabase thành công ✅</p>
+          </div>
+        );
+      case 'disconnected':
+        return (
+          <div className="connection-status disconnected">
+            <p>Lỗi kết nối: {connectionError}</p>
+          </div>
+        );
+    }
+  };
+
   return (
     <Box sx={{ 
       display: 'flex', 
@@ -1898,6 +1948,7 @@ function App() {
           </Box>
         ) : (
           <>
+            {renderConnectionStatus()}
             {!isOnline && (
               <Alert severity="warning" sx={{ mb: 2 }}>
                 Bạn đang offline. Các thay đổi sẽ được đồng bộ khi có kết nối.

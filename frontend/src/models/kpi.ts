@@ -7,6 +7,28 @@ export interface KpiModel {
   generateDefaultKPI: (staffId: string, month: number, year: number) => KpiTarget;
 }
 
+export interface KpiTarget {
+  id: string;
+  targetMonth: number;
+  targetYear: number;
+  salesTarget: number;
+  profitTarget: number;
+  notes?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface SupportDepartmentBonus {
+  id: string;
+  department: string;
+  bonusMonth: Date | string;
+  bonusAmount: number;
+  achievementRate: number;
+  notes?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export const KpiService: KpiModel = {
   calculateKPI: (staffId, month, year, vehicles) => {
     const staffVehicles = vehicles.filter((v: any) => 
