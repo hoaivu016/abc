@@ -1,15 +1,20 @@
-import { createClient, type Session } from '@supabase/supabase-js';
+import { createClient } from '@supabase/supabase-js';
+import type { User, Session } from '@supabase/supabase-js';
 
 // Lấy thông tin kết nối từ biến môi trường
-const supabaseUrl = process.env.REACT_APP_SUPABASE_URL || 'https://qqxvaaabmnkmlvqehtoz.supabase.co';
+const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
 const supabaseAnonKey = process.env.REACT_APP_SUPABASE_ANON_KEY;
-const defaultEmail = process.env.REACT_APP_DEFAULT_EMAIL || 'admin@example.com';
-const defaultPassword = process.env.REACT_APP_DEFAULT_PASSWORD || 'admin123';
+const defaultEmail = process.env.REACT_APP_DEFAULT_EMAIL;
+const defaultPassword = process.env.REACT_APP_DEFAULT_PASSWORD;
 
-if (!supabaseAnonKey) {
+// Kiểm tra các biến môi trường bắt buộc
+if (!supabaseUrl || !supabaseAnonKey || !defaultEmail || !defaultPassword) {
   throw new Error(
-    'Thiếu REACT_APP_SUPABASE_ANON_KEY. Vui lòng thêm vào file .env:\n' +
-    'REACT_APP_SUPABASE_ANON_KEY=your_supabase_anon_key'
+    'Thiếu biến môi trường. Vui lòng kiểm tra các biến sau trong file .env:\n' +
+    'REACT_APP_SUPABASE_URL\n' +
+    'REACT_APP_SUPABASE_ANON_KEY\n' +
+    'REACT_APP_DEFAULT_EMAIL\n' +
+    'REACT_APP_DEFAULT_PASSWORD'
   );
 }
 
@@ -18,13 +23,15 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     autoRefreshToken: true,
     persistSession: true,
-    detectSessionInUrl: true
+    detectSessionInUrl: true,
+    storage: window.localStorage,
+    storageKey: 'supabase.auth.token',
+    flowType: 'implicit'
   },
   global: {
     headers: {
       'Accept': 'application/json',
       'Content-Type': 'application/json',
-      'Prefer': 'return=minimal'
     },
   },
 });
@@ -32,11 +39,12 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 // Hàm đăng nhập với tài khoản mặc định
 export const signInWithDefaultAccount = async (): Promise<Session | null> => {
   try {
-    // Kiểm tra phiên hiện tại
-    const { data: sessionData } = await supabase.auth.getSession();
-    if (sessionData.session) return sessionData.session;
-
-    // Nếu không có phiên, thực hiện đăng nhập với tài khoản mặc định
+    // Xóa session cũ nếu có
+    await supabase.auth.signOut();
+    
+    console.log('Đang thử đăng nhập với:', defaultEmail);
+    
+    // Thực hiện đăng nhập với tài khoản mặc định
     const { data, error } = await supabase.auth.signInWithPassword({
       email: defaultEmail,
       password: defaultPassword
@@ -44,9 +52,19 @@ export const signInWithDefaultAccount = async (): Promise<Session | null> => {
     
     if (error) {
       console.error('Lỗi đăng nhập:', error);
+      if (error.message === 'Invalid login credentials') {
+        console.error('Thông tin đăng nhập không hợp lệ. Vui lòng kiểm tra email và mật khẩu trong biến môi trường.');
+        console.error('REACT_APP_DEFAULT_EMAIL:', defaultEmail);
+        // Không log mật khẩu vì lý do bảo mật
+      }
       throw error;
     }
 
+    if (!data?.session) {
+      throw new Error('Không nhận được phiên sau khi đăng nhập');
+    }
+
+    console.log('Đăng nhập thành công:', data.user?.email);
     return data.session;
   } catch (error) {
     console.error('Lỗi xác thực:', error);
