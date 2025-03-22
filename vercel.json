@@ -28,6 +28,15 @@
       ]
     },
     {
+      "source": "/debug-vercel.html",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache, no-store, must-revalidate"
+        }
+      ]
+    },
+    {
       "source": "/(.*)\\.(?:js|css|jpg|jpeg|gif|png|ico|svg|woff|woff2|ttf|otf)",
       "headers": [
         {
@@ -71,6 +80,7 @@
     { "source": "/offline.html", "destination": "/offline.html" },
     { "source": "/404.html", "destination": "/404.html" },
     { "source": "/debug.html", "destination": "/debug.html" },
+    { "source": "/debug-vercel.html", "destination": "/debug-vercel.html" },
     { "source": "/(.*)", "destination": "/index.html" }
   ],
   "routes": [
@@ -87,6 +97,13 @@
     },
     {
       "src": "/debug.html",
+      "headers": {
+        "Cache-Control": "no-cache, no-store, must-revalidate"
+      },
+      "continue": true
+    },
+    {
+      "src": "/debug-vercel.html",
       "headers": {
         "Cache-Control": "no-cache, no-store, must-revalidate"
       },

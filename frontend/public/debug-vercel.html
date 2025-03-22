@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kiểm tra kết nối Vercel - Vehicle Management</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      margin: 0;
+      padding: 20px;
+      background-color: #f5f5f5;
+      color: #333;
+      line-height: 1.6;
+    }
+    h1 {
+      color: #0070f3;
+      margin-bottom: 20px;
+      border-bottom: 1px solid #eaeaea;
+      padding-bottom: 10px;
+    }
+    h2 {
+      color: #333;
+      margin-top: 30px;
+      margin-bottom: 15px;
+    }
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      background-color: white;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+    .section {
+      margin-bottom: 30px;
+      padding: 15px;
+      border: 1px solid #eaeaea;
+      border-radius: 5px;
+    }
+    .info-row {
+      display: flex;
+      flex-wrap: wrap;
+      margin-bottom: 10px;
+    }
+    .info-label {
+      width: 180px;
+      font-weight: bold;
+    }
+    .info-value {
+      flex: 1;
+      word-break: break-word;
+    }
+    .test {
+      margin-bottom: 15px;
+      padding: 12px;
+      border-left: 4px solid #ddd;
+      background-color: #f9f9f9;
+    }
+    .test-name {
+      font-weight: bold;
+      margin-bottom: 5px;
+    }
+    .test-result {
+      margin-top: 8px;
+    }
+    .pending {
+      color: #f59f00;
+    }
+    .success {
+      color: #37b24d;
+    }
+    .error {
+      color: #e03131;
+    }
+    .warning {
+      color: #f08c00;
+    }
+    button {
+      background-color: #0070f3;
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 14px;
+      margin-right: 10px;
+      margin-bottom: 10px;
+      transition: background-color 0.2s;
+    }
+    button:hover {
+      background-color: #0051a2;
+    }
+    .button-section {
+      margin-bottom: 20px;
+    }
+    pre {
+      background: #f1f1f1;
+      padding: 10px;
+      border-radius: 4px;
+      overflow-x: auto;
+      font-size: 13px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 15px;
+    }
+    th, td {
+      border: 1px solid #ddd;
+      padding: 8px;
+      text-align: left;
+    }
+    th {
+      background-color: #f2f2f2;
+    }
+    .log-entry {
+      margin-bottom: 5px;
+      font-family: monospace;
+    }
+    .result-details {
+      margin-top: 10px;
+      border-top: 1px dashed #ddd;
+      padding-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Kiểm tra kết nối Vercel - Vehicle Management</h1>
+    
+    <div class="button-section">
+      <button id="run-all-tests">Chạy tất cả các kiểm tra</button>
+      <button id="clear-results">Xóa kết quả</button>
+    </div>
+
+    <div class="section">
+      <h2>Thông tin hiện tại</h2>
+      <div class="info-row">
+        <div class="info-label">URL hiện tại:</div>
+        <div class="info-value" id="current-url"></div>
+      </div>
+      <div class="info-row">
+        <div class="info-label">User Agent:</div>
+        <div class="info-value" id="user-agent"></div>
+      </div>
+      <div class="info-row">
+        <div class="info-label">Thời gian hiện tại:</div>
+        <div class="info-value" id="current-time"></div>
+      </div>
+      <div class="info-row">
+        <div class="info-label">Chế độ online:</div>
+        <div class="info-value" id="online-status"></div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Kiểm tra kết nối cơ bản</h2>
+      <div class="test" id="dns-lookup">
+        <div class="test-name">Tra cứu DNS</div>
+        <button class="test-button">Kiểm tra</button>
+        <div class="test-result pending">Đang chờ...</div>
+      </div>
+      <div class="test" id="ping-vercel">
+        <div class="test-name">Ping đến Vercel</div>
+        <button class="test-button">Kiểm tra</button>
+        <div class="test-result pending">Đang chờ...</div>
+      </div>
+      <div class="test" id="static-resource">
+        <div class="test-name">Tải tài nguyên tĩnh</div>
+        <button class="test-button">Kiểm tra</button>
+        <div class="test-result pending">Đang chờ...</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Kiểm tra cấu hình Vercel</h2>
+      <div class="test" id="vercel-routes">
+        <div class="test-name">Kiểm tra routing</div>
+        <button class="test-button">Kiểm tra</button>
+        <div class="test-result pending">Đang chờ...</div>
+      </div>
+      <div class="test" id="vercel-headers">
+        <div class="test-name">Kiểm tra headers</div>
+        <button class="test-button">Kiểm tra</button>
+        <div class="test-result pending">Đang chờ...</div>
+      </div>
+      <div class="test" id="service-worker-status">
+        <div class="test-name">Trạng thái Service Worker</div>
+        <button class="test-button">Kiểm tra</button>
+        <div class="test-result pending">Đang chờ...</div>
+      </div>
+      <div class="test" id="vercel-config">
+        <div class="test-name">Xem cấu hình Vercel</div>
+        <button class="test-button">Kiểm tra</button>
+        <div class="test-result pending">Đang chờ...</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Kiểm tra kết nối Supabase</h2>
+      <div class="test" id="supabase-ping">
+        <div class="test-name">Ping đến Supabase</div>
+        <button class="test-button">Kiểm tra</button>
+        <div class="test-result pending">Đang chờ...</div>
+      </div>
+      <div class="test" id="supabase-auth">
+        <div class="test-name">Kiểm tra xác thực Supabase</div>
+        <button class="test-button">Kiểm tra</button>
+        <div class="test-result pending">Đang chờ...</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Nhật ký kiểm tra</h2>
+      <div id="test-log"></div>
+    </div>
+  </div>
+
+  <script>
+    // Hiển thị thông tin hiện tại
+    document.getElementById('current-url').textContent = window.location.href;
+    document.getElementById('user-agent').textContent = navigator.userAgent;
+    document.getElementById('current-time').textContent = new Date().toLocaleString('vi-VN');
+    document.getElementById('online-status').textContent = navigator.onLine ? 'Online ✅' : 'Offline ❌';
+
+    // Cập nhật trạng thái online
+    window.addEventListener('online', () => {
+      document.getElementById('online-status').textContent = 'Online ✅';
+      log('Kết nối mạng đã được thiết lập lại');
+    });
+    
+    window.addEventListener('offline', () => {
+      document.getElementById('online-status').textContent = 'Offline ❌';
+      log('Kết nối mạng đã bị mất');
+    });
+
+    // Hàm ghi log
+    function log(message, type = 'info') {
+      const logContainer = document.getElementById('test-log');
+      const entry = document.createElement('div');
+      entry.className = `log-entry ${type}`;
+      entry.textContent = `[${new Date().toLocaleTimeString('vi-VN')}] ${message}`;
+      logContainer.prepend(entry);
+    }
+
+    // Hàm cập nhật kết quả kiểm tra
+    function updateTestResult(testId, status, message, details = null) {
+      const resultEl = document.querySelector(`#${testId} .test-result`);
+      resultEl.className = `test-result ${status}`;
+      resultEl.textContent = message;
+      
+      // Thêm chi tiết nếu có
+      if (details) {
+        const detailsEl = document.createElement('div');
+        detailsEl.className = 'result-details';
+        
+        if (typeof details === 'string') {
+          detailsEl.textContent = details;
+        } else if (typeof details === 'object') {
+          const pre = document.createElement('pre');
+          pre.textContent = JSON.stringify(details, null, 2);
+          detailsEl.appendChild(pre);
+        }
+        
+        // Xóa chi tiết cũ nếu có
+        const existingDetails = resultEl.nextElementSibling;
+        if (existingDetails && existingDetails.className === 'result-details') {
+          existingDetails.remove();
+        }
+        
+        resultEl.parentNode.insertBefore(detailsEl, resultEl.nextSibling);
+      }
+      
+      log(`${document.querySelector(`#${testId} .test-name`).textContent}: ${message}`, status);
+    }
+
+    // Kiểm tra DNS
+    async function checkDNS() {
+      try {
+        updateTestResult('dns-lookup', 'pending', 'Đang kiểm tra...');
+        const hostname = window.location.hostname;
+        
+        // Sử dụng một API công khai để tra cứu DNS
+        const response = await fetch(`https://dns.google/resolve?name=${hostname}&type=A`);
+        const data = await response.json();
+        
+        if (data.Answer && data.Answer.length > 0) {
+          updateTestResult('dns-lookup', 'success', 'DNS phân giải thành công', data);
+          return true;
+        } else {
+          updateTestResult('dns-lookup', 'error', 'Không thể phân giải DNS', data);
+          return false;
+        }
+      } catch (error) {
+        updateTestResult('dns-lookup', 'error', `Lỗi: ${error.message}`);
+        return false;
+      }
+    }
+
+    // Kiểm tra ping đến Vercel
+    async function pingVercel() {
+      try {
+        updateTestResult('ping-vercel', 'pending', 'Đang ping...');
+        const startTime = performance.now();
+        
+        // Gửi yêu cầu đến một tệp tĩnh nhỏ để kiểm tra thời gian phản hồi
+        const response = await fetch('/favicon.ico', { 
+          method: 'HEAD',
+          cache: 'no-store'
+        });
+        
+        const endTime = performance.now();
+        const pingTime = Math.round(endTime - startTime);
+        
+        if (response.ok) {
+          updateTestResult('ping-vercel', 'success', `Thành công (${pingTime}ms)`, {
+            status: response.status,
+            headers: Object.fromEntries([...response.headers.entries()]),
+            time: pingTime
+          });
+          return true;
+        } else {
+          updateTestResult('ping-vercel', 'error', `Lỗi: ${response.status} ${response.statusText}`);
+          return false;
+        }
+      } catch (error) {
+        updateTestResult('ping-vercel', 'error', `Lỗi: ${error.message}`);
+        return false;
+      }
+    }
+
+    // Kiểm tra tải tài nguyên tĩnh
+    async function checkStaticResource() {
+      try {
+        updateTestResult('static-resource', 'pending', 'Đang kiểm tra...');
+        
+        // Danh sách tài nguyên cần kiểm tra
+        const resources = [
+          '/manifest.json',
+          '/logo192.png',
+          '/service-worker.js'
+        ];
+        
+        const results = [];
+        
+        for (const resource of resources) {
+          try {
+            const startTime = performance.now();
+            const response = await fetch(resource, { cache: 'no-store' });
+            const endTime = performance.now();
+            
+            results.push({
+              resource,
+              status: response.status,
+              time: Math.round(endTime - startTime),
+              success: response.ok
+            });
+          } catch (error) {
+            results.push({
+              resource,
+              error: error.message,
+              success: false
+            });
+          }
+        }
+        
+        const allSuccess = results.every(r => r.success);
+        
+        if (allSuccess) {
+          updateTestResult('static-resource', 'success', 'Tất cả tài nguyên tĩnh tải thành công', results);
+          return true;
+        } else {
+          updateTestResult('static-resource', 'error', 'Một số tài nguyên tĩnh không tải được', results);
+          return false;
+        }
+      } catch (error) {
+        updateTestResult('static-resource', 'error', `Lỗi: ${error.message}`);
+        return false;
+      }
+    }
+
+    // Kiểm tra routing
+    async function checkRouting() {
+      try {
+        updateTestResult('vercel-routes', 'pending', 'Đang kiểm tra routing...');
+        
+        // Kiểm tra các route đặc biệt
+        const routes = [
+          '/',
+          '/index.html',
+          '/non-existent-path', // Kiểm tra SPA routing
+          '/offline.html',
+          '/404.html'
+        ];
+        
+        const results = [];
+        
+        for (const route of routes) {
+          try {
+            const startTime = performance.now();
+            const response = await fetch(route, { 
+              method: 'HEAD',
+              cache: 'no-store'
+            });
+            const endTime = performance.now();
+            
+            results.push({
+              route,
+              status: response.status,
+              time: Math.round(endTime - startTime),
+              redirected: response.redirected,
+              url: response.url
+            });
+          } catch (error) {
+            results.push({
+              route,
+              error: error.message
+            });
+          }
+        }
+        
+        updateTestResult('vercel-routes', 'success', 'Kiểm tra routing hoàn tất', results);
+        return true;
+      } catch (error) {
+        updateTestResult('vercel-routes', 'error', `Lỗi: ${error.message}`);
+        return false;
+      }
+    }
+
+    // Kiểm tra headers
+    async function checkHeaders() {
+      try {
+        updateTestResult('vercel-headers', 'pending', 'Đang kiểm tra headers...');
+        
+        // Kiểm tra headers của các tài nguyên khác nhau
+        const resources = [
+          { url: '/', expectedHeaders: ['content-type'] },
+          { url: '/service-worker.js', expectedHeaders: ['service-worker-allowed', 'cache-control'] },
+          { url: '/manifest.json', expectedHeaders: ['content-type', 'cache-control'] }
+        ];
+        
+        const results = [];
+        
+        for (const resource of resources) {
+          try {
+            const response = await fetch(resource.url, { 
+              method: 'HEAD',
+              cache: 'no-store'
+            });
+            
+            const headers = Object.fromEntries([...response.headers.entries()]);
+            const missingHeaders = resource.expectedHeaders.filter(
+              header => !response.headers.has(header.toLowerCase())
+            );
+            
+            results.push({
+              url: resource.url,
+              status: response.status,
+              headers,
+              missing: missingHeaders,
+              allHeadersPresent: missingHeaders.length === 0
+            });
+          } catch (error) {
+            results.push({
+              url: resource.url,
+              error: error.message
+            });
+          }
+        }
+        
+        const allHeadersPresent = results.every(r => r.allHeadersPresent === true || r.error);
+        
+        if (allHeadersPresent) {
+          updateTestResult('vercel-headers', 'success', 'Tất cả headers dự kiến đều hiện diện', results);
+          return true;
+        } else {
+          updateTestResult('vercel-headers', 'warning', 'Một số headers dự kiến không hiện diện', results);
+          return false;
+        }
+      } catch (error) {
+        updateTestResult('vercel-headers', 'error', `Lỗi: ${error.message}`);
+        return false;
+      }
+    }
+
+    // Kiểm tra Service Worker
+    async function checkServiceWorker() {
+      try {
+        updateTestResult('service-worker-status', 'pending', 'Đang kiểm tra Service Worker...');
+        
+        if (!('serviceWorker' in navigator)) {
+          updateTestResult('service-worker-status', 'warning', 'Service Worker không được hỗ trợ trong trình duyệt này');
+          return false;
+        }
+        
+        // Kiểm tra Service Worker đã đăng ký
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        
+        if (registrations.length === 0) {
+          updateTestResult('service-worker-status', 'warning', 'Không có Service Worker nào được đăng ký');
+          return false;
+        }
+        
+        const swInfo = registrations.map(reg => ({
+          scope: reg.scope,
+          active: !!reg.active,
+          installing: !!reg.installing,
+          waiting: !!reg.waiting,
+          state: reg.active ? reg.active.state : 'không có'
+        }));
+        
+        updateTestResult('service-worker-status', 'success', `${registrations.length} Service Worker đang hoạt động`, swInfo);
+        return true;
+      } catch (error) {
+        updateTestResult('service-worker-status', 'error', `Lỗi: ${error.message}`);
+        return false;
+      }
+    }
+
+    // Kiểm tra cấu hình Vercel
+    async function checkVercelConfig() {
+      try {
+        updateTestResult('vercel-config', 'pending', 'Đang kiểm tra cấu hình Vercel...');
+        
+        // Fetch public Vercel config if available
+        const configPaths = [
+          '/_vercel/config',
+          '/vercel.json'
+        ];
+        
+        let configData = null;
+        
+        for (const path of configPaths) {
+          try {
+            const response = await fetch(path, { cache: 'no-store' });
+            if (response.ok) {
+              configData = await response.json();
+              break;
+            }
+          } catch (error) {
+            // Continue to next path
+          }
+        }
+        
+        if (configData) {
+          updateTestResult('vercel-config', 'success', 'Đã lấy được cấu hình Vercel', configData);
+          return true;
+        } else {
+          // Kiểm tra gián tiếp
+          const envInfo = {
+            isVercel: !!window.VERCEL,
+            vercelEnv: window.VERCEL_ENV || 'unknown',
+            isProd: window.location.hostname !== 'localhost' && !window.location.hostname.includes('vercel.app')
+          };
+          
+          updateTestResult('vercel-config', 'warning', 'Không thể truy cập trực tiếp cấu hình Vercel', envInfo);
+          return false;
+        }
+      } catch (error) {
+        updateTestResult('vercel-config', 'error', `Lỗi: ${error.message}`);
+        return false;
+      }
+    }
+
+    // Kiểm tra ping đến Supabase
+    async function pingSupabase() {
+      try {
+        updateTestResult('supabase-ping', 'pending', 'Đang ping Supabase...');
+        
+        // Kiểm tra nếu supabase đã được định nghĩa toàn cục
+        if (typeof supabase !== 'undefined') {
+          try {
+            const startTime = performance.now();
+            const { data, error } = await supabase.from('health').select('*').limit(1);
+            const endTime = performance.now();
+            const pingTime = Math.round(endTime - startTime);
+            
+            if (error) {
+              updateTestResult('supabase-ping', 'error', `Lỗi Supabase: ${error.message}`, error);
+              return false;
+            }
+            
+            updateTestResult('supabase-ping', 'success', `Kết nối Supabase thành công (${pingTime}ms)`, {
+              data,
+              time: pingTime
+            });
+            return true;
+          } catch (err) {
+            updateTestResult('supabase-ping', 'error', `Lỗi kết nối Supabase: ${err.message}`);
+            return false;
+          }
+        } else {
+          // Nếu không có biến supabase toàn cục, thử kiểm tra URL từ môi trường
+          const supabaseUrl = process.env.REACT_APP_SUPABASE_URL || 
+                              process.env.VITE_SUPABASE_URL || 
+                              window.SUPABASE_URL;
+          
+          if (!supabaseUrl) {
+            updateTestResult('supabase-ping', 'warning', 'Không tìm thấy URL Supabase trong môi trường');
+            return false;
+          }
+          
+          try {
+            const pingUrl = `${supabaseUrl}/rest/v1/`;
+            const startTime = performance.now();
+            const response = await fetch(pingUrl, {
+              method: 'HEAD',
+              headers: {
+                'Content-Type': 'application/json'
+              }
+            });
+            const endTime = performance.now();
+            const pingTime = Math.round(endTime - startTime);
+            
+            updateTestResult('supabase-ping', 'success', `Ping Supabase thành công (${pingTime}ms)`, {
+              status: response.status,
+              headers: Object.fromEntries([...response.headers.entries()]),
+              time: pingTime
+            });
+            return true;
+          } catch (err) {
+            updateTestResult('supabase-ping', 'error', `Không thể ping Supabase: ${err.message}`);
+            return false;
+          }
+        }
+      } catch (error) {
+        updateTestResult('supabase-ping', 'error', `Lỗi: ${error.message}`);
+        return false;
+      }
+    }
+
+    // Kiểm tra xác thực Supabase
+    async function checkSupabaseAuth() {
+      try {
+        updateTestResult('supabase-auth', 'pending', 'Đang kiểm tra xác thực Supabase...');
+        
+        // Kiểm tra nếu supabase đã được định nghĩa toàn cục
+        if (typeof supabase !== 'undefined') {
+          try {
+            const { data, error } = await supabase.auth.getSession();
+            
+            if (error) {
+              updateTestResult('supabase-auth', 'error', `Lỗi xác thực: ${error.message}`, error);
+              return false;
+            }
+            
+            const sessionInfo = {
+              hasSession: !!data.session,
+              expires: data.session ? data.session.expires_at : null,
+              provider: data.session ? data.session.provider : null
+            };
+            
+            updateTestResult('supabase-auth', 'success', `Trạng thái xác thực: ${sessionInfo.hasSession ? 'Đã đăng nhập' : 'Chưa đăng nhập'}`, sessionInfo);
+            return true;
+          } catch (err) {
+            updateTestResult('supabase-auth', 'error', `Lỗi kiểm tra xác thực: ${err.message}`);
+            return false;
+          }
+        } else {
+          updateTestResult('supabase-auth', 'warning', 'Không tìm thấy đối tượng Supabase');
+          return false;
+        }
+      } catch (error) {
+        updateTestResult('supabase-auth', 'error', `Lỗi: ${error.message}`);
+        return false;
+      }
+    }
+
+    // Xóa kết quả
+    document.getElementById('clear-results').addEventListener('click', () => {
+      document.querySelectorAll('.test-result').forEach(el => {
+        el.className = 'test-result pending';
+        el.textContent = 'Đang chờ...';
+      });
+      
+      document.querySelectorAll('.result-details').forEach(el => {
+        el.remove();
+      });
+      
+      document.getElementById('test-log').innerHTML = '';
+      log('Đã xóa tất cả kết quả kiểm tra');
+    });
+
+    // Chạy tất cả các kiểm tra
+    document.getElementById('run-all-tests').addEventListener('click', async () => {
+      log('Bắt đầu chạy tất cả các kiểm tra...');
+      
+      await checkDNS();
+      await pingVercel();
+      await checkStaticResource();
+      await checkRouting();
+      await checkHeaders();
+      await checkServiceWorker();
+      await checkVercelConfig();
+      await pingSupabase();
+      await checkSupabaseAuth();
+      
+      log('Hoàn tất tất cả các kiểm tra');
+    });
+
+    // Thêm lắng nghe sự kiện cho các nút kiểm tra riêng lẻ
+    document.querySelectorAll('.test-button').forEach(button => {
+      const testId = button.parentElement.id;
+      button.addEventListener('click', async () => {
+        switch (testId) {
+          case 'dns-lookup':
+            await checkDNS();
+            break;
+          case 'ping-vercel':
+            await pingVercel();
+            break;
+          case 'static-resource':
+            await checkStaticResource();
+            break;
+          case 'vercel-routes':
+            await checkRouting();
+            break;
+          case 'vercel-headers':
+            await checkHeaders();
+            break;
+          case 'service-worker-status':
+            await checkServiceWorker();
+            break;
+          case 'vercel-config':
+            await checkVercelConfig();
+            break;
+          case 'supabase-ping':
+            await pingSupabase();
+            break;
+          case 'supabase-auth':
+            await checkSupabaseAuth();
+            break;
+        }
+      });
+    });
+
+    // Ghi log khi trang được tải
+    log('Trang kiểm tra kết nối Vercel đã được tải');
+    
+    // Kiểm tra xem có lỗi nào trong console hay không
+    const originalConsoleError = console.error;
+    console.error = function() {
+      log(`Console Error: ${Array.from(arguments).join(' ')}`, 'error');
+      originalConsoleError.apply(console, arguments);
+    };
+    
+    // Bắt các lỗi không xử lý
+    window.addEventListener('error', (event) => {
+      log(`Lỗi không xử lý: ${event.message} tại ${event.filename}:${event.lineno}`, 'error');
+    });
+    
+    window.addEventListener('unhandledrejection', (event) => {
+      log(`Promise bị từ chối không xử lý: ${event.reason}`, 'error');
+    });
+  </script>
+</body>
+</html> 
