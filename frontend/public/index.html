@@ -20,8 +20,18 @@
         enabled: true,
         messagePortErrors: true,
         networkErrors: true,
-        resourceErrors: true
+        resourceErrors: true,
+        reactRenderErrors: true
       };
+      
+      // Biến theo dõi số lỗi message port
+      window._messagePortErrorCount = 0;
+      window._maxMessagePortErrors = 5;
+      
+      // Biến theo dõi số lần thử lại
+      window._retryCounter = 0;
+      window._maxRetries = 3;
+      window._lastErrorTimestamp = 0;
       
       // Kiểm tra tham số URL để bật/tắt bộ lọc lỗi
       function updateErrorFilters() {
@@ -44,6 +54,7 @@
         
         const messagePortPatterns = [
           'message port closed',
+          'The message port closed before a response was received',
           'port closed',
           'extension context invalidated'
         ];
@@ -60,8 +71,28 @@
           'The connection to'
         ];
         
+        const reactPatterns = [
+          'Minified React error',
+          'Element type is invalid',
+          'Cannot read property',
+          'is not a function',
+          'is undefined',
+          'Invalid hook call',
+          'Rendered fewer hooks than expected',
+          'Maximum update depth exceeded'
+        ];
+        
         if (window._errorFilters.messagePortErrors && 
             messagePortPatterns.some(pattern => message.includes(pattern))) {
+          window._messagePortErrorCount++;
+          
+          // Nếu quá nhiều lỗi message port, thử refresh service worker
+          if (window._messagePortErrorCount >= window._maxMessagePortErrors) {
+            console.warn('Đã phát hiện quá nhiều lỗi message port. Thử refresh service worker...');
+            refreshServiceWorker();
+            window._messagePortErrorCount = 0;
+          }
+          
           return true;
         }
         
@@ -70,7 +101,59 @@
           return true;
         }
         
+        if (window._errorFilters.reactRenderErrors &&
+            reactPatterns.some(pattern => message.includes(pattern))) {
+          
+          // Đặc biệt xử lý lỗi React render
+          handleReactError(message);
+          return true;
+        }
+        
         return false;
+      }
+      
+      // Xử lý lỗi React đặc biệt
+      function handleReactError(message) {
+        console.warn('Phát hiện lỗi React:', message);
+        
+        // Thêm logic thử lại nếu cần
+        const currentTime = Date.now();
+        if (currentTime - window._lastErrorTimestamp > 10000) {
+          // Reset bộ đếm nếu lỗi xảy ra cách nhau hơn 10 giây
+          window._retryCounter = 0;
+        }
+        
+        window._lastErrorTimestamp = currentTime;
+        window._retryCounter++;
+        
+        if (window._retryCounter <= window._maxRetries) {
+          setTimeout(() => {
+            // Thử tải lại trang với tham số nocache
+            console.log(`Thử lại lần ${window._retryCounter}/${window._maxRetries}...`);
+            // Nếu là lần thử cuối cùng, tải lại trang
+            if (window._retryCounter === window._maxRetries) {
+              window.location.reload();
+            }
+          }, 1000 * Math.pow(2, window._retryCounter));
+        } else {
+          // Ngừng thử lại sau số lần quy định
+          console.error('Đã vượt quá số lần thử lại tối đa.');
+        }
+      }
+      
+      // Hàm refresh service worker
+      function refreshServiceWorker() {
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.getRegistrations().then(registrations => {
+            for (let registration of registrations) {
+              registration.update().catch(err => {
+                console.warn('Không thể cập nhật service worker:', err);
+              });
+            }
+          }).catch(err => {
+            console.warn('Không thể tìm thấy service worker registrations:', err);
+          });
+        }
       }
       
       // Log lỗi một cách thông minh

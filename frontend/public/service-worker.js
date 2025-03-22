@@ -1,7 +1,7 @@
 /* eslint-disable no-restricted-globals */
 
 // Tên cache và URL
-const CACHE_NAME = 'vehicle-management-cache-v3';
+const CACHE_NAME = 'vehicle-management-cache-v4';
 const OFFLINE_URL = '/offline.html';
 const NOT_FOUND_URL = '/404.html';
 const DEBUG_URL = '/debug.html';
@@ -26,6 +26,7 @@ const DEFAULT_CACHE_TIME = 24 * 60 * 60 * 1000;
 // Biến theo dõi số lỗi message port
 let messagePortErrorCount = 0;
 const MAX_MESSAGE_PORT_ERRORS = 5;
+let lastRefreshTime = 0;
 
 // Log lỗi một cách an toàn
 function logError(error, source) {
@@ -50,221 +51,192 @@ function logError(error, source) {
 function isMessagePortError(error) {
   if (!error) return false;
   
-  const errorMessage = error.message || error.toString();
-  return errorMessage.includes('message port closed') || 
-         errorMessage.includes('port closed') ||
-         errorMessage.includes('extension context invalidated');
+  const errorStr = error.toString();
+  return errorStr.includes('message port closed') || 
+         errorStr.includes('The message port closed before a response was received');
 }
 
-// Khi service worker được cài đặt
-self.addEventListener('install', (event) => {
-  console.log('[ServiceWorker] Đang cài đặt');
+// Xử lý khi gặp lỗi message port
+function handleMessagePortError() {
+  messagePortErrorCount++;
   
-  // Kích hoạt ngay lập tức không đợi làm mới trang
-  self.skipWaiting();
-  
-  // Cache tài nguyên cần thiết
+  // Nếu gặp quá nhiều lỗi message port trong thời gian ngắn
+  const now = Date.now();
+  if (messagePortErrorCount >= MAX_MESSAGE_PORT_ERRORS && (now - lastRefreshTime > 60000)) {
+    lastRefreshTime = now;
+    messagePortErrorCount = 0;
+    
+    // Thử unregister và register lại service worker
+    self.registration.unregister()
+      .then(() => {
+        logError('Service worker đã được gỡ bỏ và sẽ được đăng ký lại sau', 'refresh');
+        return self.clients.matchAll();
+      })
+      .then(clients => {
+        clients.forEach(client => {
+          if (client.url && client.type === 'window') {
+            client.postMessage({
+              type: 'REFRESH_SERVICE_WORKER',
+              timestamp: Date.now()
+            });
+          }
+        });
+      })
+      .catch(err => {
+        logError(err, 'refresh-failed');
+      });
+  }
+}
+
+// Sự kiện cài đặt Service Worker
+self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => {
-        console.log('[ServiceWorker] Đang cache tài nguyên');
+        console.log('[SW] Đang cache tài nguyên ban đầu');
         return cache.addAll(CACHE_ASSETS);
       })
+      .then(() => self.skipWaiting())
       .catch(error => {
         logError(error, 'install');
-        // Vẫn tiếp tục cài đặt ngay cả khi cache thất bại
       })
   );
 });
 
-// Khi service worker được kích hoạt
-self.addEventListener('activate', (event) => {
-  console.log('[ServiceWorker] Đã kích hoạt');
-  
-  // Xóa cache cũ
+// Sự kiện kích hoạt Service Worker
+self.addEventListener('activate', event => {
   event.waitUntil(
-    caches.keys().then(cacheNames => {
-      return Promise.all(
-        cacheNames.filter(cacheName => {
-          return cacheName.startsWith('vehicle-management-cache') && 
-                 cacheName !== CACHE_NAME;
-        }).map(cacheName => {
-          console.log('[ServiceWorker] Xóa cache cũ:', cacheName);
-          return caches.delete(cacheName);
-        })
-      );
-    })
-    .then(() => {
-      console.log('[ServiceWorker] Claim clients');
-      return self.clients.claim();
-    })
-    .catch(error => {
-      logError(error, 'activate');
-    })
+    caches.keys()
+      .then(cacheNames => {
+        return Promise.all(
+          cacheNames.filter(cacheName => {
+            return cacheName.startsWith('vehicle-management-cache-') && 
+                   cacheName !== CACHE_NAME;
+          }).map(cacheName => {
+            console.log('[SW] Xóa cache cũ:', cacheName);
+            return caches.delete(cacheName);
+          })
+        );
+      })
+      .then(() => {
+        console.log('[SW] Service Worker đã được kích hoạt!');
+        return self.clients.claim();
+      })
+      .catch(error => {
+        logError(error, 'activate');
+      })
   );
 });
 
-// Xử lý fetch request
-self.addEventListener('fetch', (event) => {
-  try {
-    // Bỏ qua URLs từ bên thứ 3
-    if (!event.request.url.startsWith(self.location.origin)) {
-      return;
-    }
-
-    // Bỏ qua yêu cầu không phải GET
-    if (event.request.method !== 'GET') {
-      return;
-    }
-    
-    // Phân tích URL để xác định loại tài nguyên
-    const url = new URL(event.request.url);
-    const pathname = url.pathname;
-    
-    // Xử lý đặc biệt cho trang debug
-    if (pathname.endsWith('/debug.html') || pathname.endsWith('/debug-vercel.html')) {
-      event.respondWith(
-        fetch(event.request)
-          .catch(() => caches.match(event.request)
-            .then(cachedResponse => cachedResponse || caches.match(OFFLINE_URL)))
-      );
-      return;
-    }
-
-    // Xử lý riêng cho yêu cầu trang (navigate)
-    if (event.request.mode === 'navigate') {
-      event.respondWith(
-        fetch(event.request)
+// Sự kiện fetch
+self.addEventListener('fetch', event => {
+  // Bỏ qua các yêu cầu không phải HTTP/HTTPS
+  if (!event.request.url.startsWith('http')) return;
+  
+  // Xử lý các yêu cầu API riêng biệt
+  if (event.request.url.includes('/api/') || 
+      event.request.url.includes('supabase.co') ||
+      event.request.url.includes('/rest/v1/')) {
+    // Không cache các yêu cầu API
+    return;
+  }
+  
+  // Chiến lược cache trước, sau đó mạng cho các tài nguyên tĩnh
+  event.respondWith(
+    caches.match(event.request)
+      .then(cachedResponse => {
+        // Trả về từ cache nếu có
+        if (cachedResponse) {
+          return cachedResponse;
+        }
+        
+        // Không tìm thấy trong cache, tiếp tục tải từ mạng
+        return fetch(event.request)
           .then(response => {
-            // Nếu là 404, trả về trang 404.html
-            if (response.status === 404) {
-              return caches.match(NOT_FOUND_URL);
+            // Kiểm tra nếu nhận được phản hồi hợp lệ
+            if (!response || response.status !== 200 || response.type !== 'basic') {
+              // Nếu là lỗi 404, trả về trang 404 từ cache
+              if (response.status === 404) {
+                return caches.match(NOT_FOUND_URL);
+              }
+              return response;
             }
+            
+            // Cache lại phản hồi mới
+            const responseToCache = response.clone();
+            
+            // Chỉ cache các tài nguyên tĩnh phổ biến
+            if (shouldCache(event.request.url)) {
+              caches.open(CACHE_NAME)
+                .then(cache => {
+                  cache.put(event.request, responseToCache);
+                })
+                .catch(err => {
+                  logError(err, 'cache-put');
+                });
+            }
+            
             return response;
           })
           .catch(error => {
-            // Xử lý lỗi message port
+            // Nếu lỗi message port, xử lý đặc biệt
             if (isMessagePortError(error)) {
-              messagePortErrorCount++;
-              console.log(`[SW] Message port error #${messagePortErrorCount}`);
-              
-              // Nếu số lượng lỗi message port vượt ngưỡng, tự reload SW
-              if (messagePortErrorCount >= MAX_MESSAGE_PORT_ERRORS) {
-                console.log('[SW] Quá nhiều lỗi message port, tự làm mới');
-                self.registration.update();
-                messagePortErrorCount = 0;
-              }
+              handleMessagePortError();
+              return new Response(
+                JSON.stringify({ error: 'Lỗi kết nối tạm thời. Vui lòng thử lại.' }),
+                { 
+                  status: 503, 
+                  headers: { 'Content-Type': 'application/json' }
+                }
+              );
             }
             
-            // Trả về trang offline nếu là navigation request
-            return caches.match(OFFLINE_URL)
-              .then(response => {
-                if (response) return response;
-                
-                // Trường hợp hiếm gặp: không tìm thấy offline.html trong cache
-                const offlineResponse = new Response(
-                  '<html><body><h1>Không có kết nối</h1><p>Vui lòng kiểm tra mạng.</p></body></html>',
-                  { headers: { 'Content-Type': 'text/html; charset=utf-8' } }
-                );
-                return offlineResponse;
-              });
-          })
-      );
-      return;
-    }
+            // Nếu lỗi mạng, trả về trang offline
+            console.log('[SW] Lỗi fetch, trả về trang offline', error);
+            return caches.match(OFFLINE_URL);
+          });
+      })
+  );
+});
 
-    // Chiến lược cache-first cho tài nguyên tĩnh
-    event.respondWith(
-      caches.match(event.request)
-        .then(cachedResponse => {
-          // Nếu có trong cache và là tài nguyên thông thường, trả về từ cache
-          if (cachedResponse) {
-            return cachedResponse;
-          }
+// Kiểm tra xem URL có nên được cache hay không
+function shouldCache(url) {
+  // Cache các tệp tĩnh như images, css, js, và fonts
+  return url.match(/\.(js|css|png|jpg|jpeg|gif|svg|woff|woff2|ttf|eot)(\?.*)?$/) ||
+         url.endsWith('/') || 
+         url.endsWith('.html');
+}
 
-          // Nếu không có trong cache, fetch từ network
-          return fetch(event.request)
-            .then(response => {
-              // Kiểm tra kết quả hợp lệ
-              if (!response || response.status !== 200 || response.type !== 'basic') {
-                // Nếu là 404, trả về trang 404.html
-                if (response && response.status === 404) {
-                  return caches.match(NOT_FOUND_URL);
-                }
-                return response;
-              }
+// Lắng nghe tin nhắn từ trang
+self.addEventListener('message', event => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
+  
+  // Đặt lại bộ đếm lỗi message port
+  if (event.data && event.data.type === 'RESET_ERROR_COUNTER') {
+    messagePortErrorCount = 0;
+    console.log('[SW] Đã đặt lại bộ đếm lỗi');
+  }
+});
 
-              // Clone response để cache
-              const responseToCache = response.clone();
-              
-              // Cache tài nguyên mới không phải API
-              if (!pathname.includes('/api/')) {
-                caches.open(CACHE_NAME)
-                  .then(cache => cache.put(event.request, responseToCache))
-                  .catch(error => logError(error, 'cache-put'));
-              }
+// Xử lý lỗi không lường trước
+self.addEventListener('error', event => {
+  logError(event.error || event.message, 'global-error');
+  
+  // Nếu là lỗi message port
+  if (isMessagePortError(event.error || event.message)) {
+    handleMessagePortError();
+  }
+});
 
-              return response;
-            })
-            .catch(error => {
-              logError(error, 'fetch');
-              
-              // Xử lý lỗi cho hình ảnh, CSS và script
-              const extension = pathname.split('.').pop().toLowerCase();
-              
-              if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'].includes(extension)) {
-                // Trả về placeholder cho hình ảnh
-                return new Response(
-                  '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">' +
-                  '<rect width="200" height="200" fill="#f0f0f0"/>' +
-                  '<text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="16">Hình ảnh không tải được</text>' +
-                  '</svg>',
-                  { headers: { 'Content-Type': 'image/svg+xml' } }
-                );
-              } else if (['css'].includes(extension)) {
-                // Trả về CSS trống cho stylesheet
-                return new Response(
-                  '/* Fallback CSS */',
-                  { headers: { 'Content-Type': 'text/css' } }
-                );
-              } else if (['js'].includes(extension)) {
-                // Trả về JS không làm gì cho script
-                return new Response(
-                  '// Fallback JS',
-                  { headers: { 'Content-Type': 'application/javascript' } }
-                );
-              }
-              
-              // Kiểm tra nếu yêu cầu là JSON API
-              if (pathname.includes('/api/') || 
-                  event.request.headers.get('Accept')?.includes('application/json')) {
-                return new Response(
-                  JSON.stringify({ error: 'Không có kết nối internet', offline: true }),
-                  { headers: { 'Content-Type': 'application/json' } }
-                );
-              }
-              
-              // Cho các tài nguyên khác, trả về response báo lỗi
-              return new Response(
-                'Không thể tải tài nguyên. Vui lòng kiểm tra kết nối mạng.',
-                { headers: { 'Content-Type': 'text/plain' } }
-              );
-            });
-        })
-    );
-  } catch (error) {
-    // Bắt và xử lý các lỗi không mong muốn
-    logError(error, 'fetch-handler');
-    
-    // Trả về response mặc định trong trường hợp lỗi nghiêm trọng
-    event.respondWith(
-      caches.match(OFFLINE_URL)
-        .then(response => response || fetch(event.request))
-        .catch(() => new Response('Lỗi không xác định', { 
-          status: 500, 
-          headers: { 'Content-Type': 'text/plain' } 
-        }))
-    );
+// Xử lý promise rejection không được bắt
+self.addEventListener('unhandledrejection', event => {
+  logError(event.reason, 'unhandled-rejection');
+  
+  // Nếu là lỗi message port
+  if (isMessagePortError(event.reason)) {
+    handleMessagePortError();
   }
 });
 
