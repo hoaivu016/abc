@@ -8,57 +8,42 @@ if (!ENV.SUPABASE_URL || !ENV.SUPABASE_ANON_KEY) {
   throw new Error('Thiếu biến môi trường SUPABASE_URL hoặc SUPABASE_ANON_KEY');
 }
 
-// Singleton instance của Supabase client
-let supabaseInstance: ReturnType<typeof createClient<Database>> | null = null;
-
-// Hàm khởi tạo Supabase client với retry mechanism
-const initSupabase = (retryCount = 0): ReturnType<typeof createClient<Database>> => {
-  if (supabaseInstance) return supabaseInstance;
-
-  try {
-    supabaseInstance = createClient<Database>(ENV.SUPABASE_URL, ENV.SUPABASE_ANON_KEY, {
-      auth: {
-        autoRefreshToken: true,
-        persistSession: true,
-        detectSessionInUrl: true,
-        storage: typeof window !== 'undefined' ? window.localStorage : undefined,
-        storageKey: 'supabase.auth.token',
-        flowType: 'pkce'
-      },
-      global: {
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-        },
-      },
-    });
-
-    // Theo dõi trạng thái xác thực
-    supabaseInstance.auth.onAuthStateChange(async (event, session) => {
-      console.log('Auth state changed:', event);
-      
-      if (event === 'SIGNED_OUT' || event === 'USER_DELETED') {
-        localStorage.removeItem('supabase.auth.token');
-        supabaseInstance = null; // Reset instance để tạo mới khi cần
-      } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-        if (session?.access_token) {
-          localStorage.setItem('supabase.auth.token', session.access_token);
-        }
-      }
-    });
-
-    return supabaseInstance;
-  } catch (error) {
-    if (retryCount < 3) {
-      console.warn(`Lỗi khởi tạo Supabase (lần ${retryCount + 1}):`, error);
-      return initSupabase(retryCount + 1);
-    }
-    throw error;
+// Khởi tạo Supabase client
+const supabase = createClient(ENV.SUPABASE_URL, ENV.SUPABASE_ANON_KEY, {
+  auth: {
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: true,
+    storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+    storageKey: 'supabase.auth.token',
+    flowType: 'pkce'
+  },
+  global: {
+    headers: {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+    },
+  },
+  db: {
+    schema: 'public'
   }
-};
+});
+
+// Theo dõi trạng thái xác thực
+supabase.auth.onAuthStateChange(async (event, session) => {
+  console.log('Auth state changed:', event);
+  
+  if (event === 'SIGNED_OUT' || event === 'USER_DELETED') {
+    localStorage.removeItem('supabase.auth.token');
+  } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+    if (session?.access_token) {
+      localStorage.setItem('supabase.auth.token', session.access_token);
+    }
+  }
+});
 
 // Export supabase instance
-export const supabase = initSupabase();
+export { supabase };
 
 // Hàm kiểm tra và làm mới token
 export const refreshToken = async (): Promise<boolean> => {
