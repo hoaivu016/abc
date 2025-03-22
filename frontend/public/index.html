@@ -7,22 +7,50 @@
     <meta name="theme-color" content="#000000" />
     <meta
       name="description"
-      content="Hệ thống quản lý kho xe"
+      content="Vehicle Management System"
     />
-    <!--
-      Notice the use of %PUBLIC_URL% in the tags above.
-      It will be replaced with the URL of the `public` folder during the build.
-      Only files inside the `public` folder can be referenced from the HTML.
+    <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
+    <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
+    <title>Vehicle Management</title>
+    <script>
+      // Xử lý lỗi message port closed toàn cục
+      window.addEventListener('error', function(event) {
+        if (event.message && event.message.includes('message port closed')) {
+          console.warn('Đã ngăn chặn lỗi message port closed');
+          event.preventDefault();
+          event.stopPropagation();
+          return false;
+        }
+      });
 
-      Unlike "/favicon.ico" or "favicon.ico", "%PUBLIC_URL%/favicon.ico" will
-      work correctly both with client-side routing and a non-root public URL.
-      Learn how to configure a non-root public URL by running `npm run build`.
-    -->
-    <title>Quản Lý Kho Xe</title>
+      // Xử lý lỗi tài nguyên không tìm thấy
+      window.addEventListener('error', function(event) {
+        if (event.target && (event.target.tagName === 'LINK' || event.target.tagName === 'SCRIPT')) {
+          console.warn('Failed to load resource:', event.target.src || event.target.href);
+          event.preventDefault();
+          event.stopPropagation();
+          return false;
+        }
+      }, true);
+    </script>
   </head>
   <body>
-    <noscript>Bạn cần bật JavaScript để chạy ứng dụng này.</noscript>
+    <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"></div>
+    <script>
+      // Đăng ký service worker
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function() {
+          navigator.serviceWorker.register('/service-worker.js')
+            .then(function(registration) {
+              console.log('ServiceWorker đăng ký thành công: ', registration.scope);
+            })
+            .catch(function(error) {
+              console.log('Lỗi đăng ký ServiceWorker: ', error);
+            });
+        });
+      }
+    </script>
     <!--
       This HTML file is a template.
       If you open it directly in the browser, you will see an empty page.
