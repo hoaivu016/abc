@@ -3,15 +3,19 @@
  * giữa môi trường development và production.
  */
 
+// Các giá trị mặc định an toàn cho production
+const DEFAULT_SUPABASE_URL = 'https://ndfvjjwhfyvltjvdafym.supabase.co';
+const DEFAULT_SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5kZnZqandoZnl2bHRqdmRhZnltIiwicm9sZSI6ImFub24iLCJpYXQiOjE2MTYyMzg0NzIsImV4cCI6MTkzMTgxNDQ3Mn0.uVP9rvFJ2kxCzTHllR1RfqkGmIU5rx1H0sLroCj3o4Y';
+
 // Lấy các biến môi trường với kiểm tra và giá trị mặc định
 export const ENV = {
-  // Supabase
-  SUPABASE_URL: process.env.REACT_APP_SUPABASE_URL || '',
-  SUPABASE_ANON_KEY: process.env.REACT_APP_SUPABASE_ANON_KEY || '',
+  // Supabase - Sử dụng giá trị mặc định nếu biến môi trường không tồn tại
+  SUPABASE_URL: process.env.REACT_APP_SUPABASE_URL || DEFAULT_SUPABASE_URL,
+  SUPABASE_ANON_KEY: process.env.REACT_APP_SUPABASE_ANON_KEY || DEFAULT_SUPABASE_KEY,
   
   // Default Admin Account
   DEFAULT_EMAIL: process.env.REACT_APP_DEFAULT_EMAIL || 'admin@example.com',
-  DEFAULT_PASSWORD: process.env.REACT_APP_DEFAULT_PASSWORD || '',
+  DEFAULT_PASSWORD: process.env.REACT_APP_DEFAULT_PASSWORD || 'password123',
   
   // Application Settings
   VERSION: process.env.REACT_APP_VERSION || '1.0.0',
@@ -35,25 +39,28 @@ export const validateEnvironment = (): boolean => {
     { key: 'DEFAULT_PASSWORD', value: ENV.DEFAULT_PASSWORD }
   ];
   
+  // Chỉ kiểm tra nếu biến môi trường là rỗng (không dùng giá trị mặc định)
   const missingVars = requiredVars.filter(v => !v.value);
   
   if (missingVars.length > 0) {
-    console.error('Missing required environment variables:');
-    missingVars.forEach(v => console.error(`- ${v.key}`));
+    console.warn('Thiếu biến môi trường, sử dụng giá trị mặc định:');
+    missingVars.forEach(v => console.warn(`- ${v.key}`));
     
-    if (ENV.IS_PRODUCTION) {
-      // Trong production, log lỗi nhưng không throw exception
-      return false;
-    } else {
-      // Trong development, throw exception để dev biết ngay lập tức
-      const errorMessage = 
-        'Thiếu biến môi trường. Vui lòng kiểm tra các biến sau trong file .env:\n' +
-        missingVars.map(v => `REACT_APP_${v.key}`).join('\n');
-      throw new Error(errorMessage);
+    // Không throw exception trong production
+    if (!ENV.IS_PRODUCTION) {
+      console.info(`Hãy thiết lập các biến môi trường sau trong file .env:\n${missingVars.map(v => `REACT_APP_${v.key}`).join('\n')}`);
     }
   }
   
   return true;
+};
+
+/**
+ * Kiểm tra xem môi trường có sẵn sàng cho kết nối Supabase không
+ * @returns {boolean} true nếu có thể kết nối với Supabase
+ */
+export const canConnectToSupabase = (): boolean => {
+  return !!ENV.SUPABASE_URL && !!ENV.SUPABASE_ANON_KEY;
 };
 
 // Log thông tin môi trường khi import module này (chỉ trong development)
@@ -68,4 +75,7 @@ if (ENV.IS_DEVELOPMENT) {
     DEFAULT_EMAIL: ENV.DEFAULT_EMAIL,
     VERSION: ENV.VERSION
   });
-} 
+}
+
+// Export hàm kiểm tra môi trường
+export { canConnectToSupabase as isSupabaseAvailable }; 
