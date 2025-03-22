@@ -12,46 +12,41 @@
     <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
     <link rel="manifest" crossorigin="use-credentials" href="%PUBLIC_URL%/manifest.json" />
     <title>Vehicle Management</title>
-    <!-- Xử lý lỗi toàn cục -->
+    <!-- Xử lý lỗi toàn cục và tự động khắc phục -->
     <script>
-      // Biến toàn cục để lưu trữ các lỗi
-      window._errorsLog = [];
-      window._errorFilters = {
-        enabled: true,
-        messagePortErrors: true,
-        networkErrors: true,
-        resourceErrors: true,
-        reactRenderErrors: true
+      // Biến theo dõi lỗi và trạng thái tự khắc phục
+      window._troubleshooter = {
+        errors: [],
+        startTime: Date.now(),
+        errorCount: 0,
+        messagePortErrorCount: 0,
+        lastErrorTime: 0,
+        lastReloadTime: 0,
+        isDebugging: false,
+        MAX_ERRORS_BEFORE_RELOAD: 10,
+        MIN_RELOAD_INTERVAL: 5 * 60 * 1000, // 5 phút
+        isHandlingError: false
       };
       
-      // Biến theo dõi số lỗi message port
-      window._messagePortErrorCount = 0;
-      window._maxMessagePortErrors = 5;
-      
-      // Biến theo dõi số lần thử lại
-      window._retryCounter = 0;
-      window._maxRetries = 3;
-      window._lastErrorTimestamp = 0;
-      
-      // Kiểm tra tham số URL để bật/tắt bộ lọc lỗi
-      function updateErrorFilters() {
-        const urlParams = new URLSearchParams(window.location.search);
-        if (urlParams.has('nofilter')) {
-          window._errorFilters.enabled = false;
-        }
-        if (urlParams.has('shownetwork')) {
-          window._errorFilters.networkErrors = false;
-        }
-        if (urlParams.has('showport')) {
-          window._errorFilters.messagePortErrors = false;
-        }
+      // Lấy tham số URL
+      function getQueryParams() {
+        return new URLSearchParams(window.location.search);
       }
-      updateErrorFilters();
       
-      // Hàm kiểm tra xem lỗi có cần lọc không
+      // Kiểm tra các tham số trong URL
+      const urlParams = getQueryParams();
+      window._troubleshooter.isDebugging = urlParams.has('debug');
+      
+      // Kiểm tra nếu đây là lần tải lại trang do lỗi
+      if (urlParams.has('recovery')) {
+        console.info('Đang trong chế độ khôi phục sau lỗi');
+        // Đánh dấu là đã reload và có thể tải lại nếu tiếp tục lỗi
+        window._troubleshooter.lastReloadTime = Date.now() - window._troubleshooter.MIN_RELOAD_INTERVAL + 10000;
+      }
+      
+      // Kiểm tra xem lỗi có nên bị lọc không
       function shouldFilterError(message) {
-        if (!window._errorFilters.enabled) return false;
-        
+        // Các mẫu lỗi message port
         const messagePortPatterns = [
           'message port closed',
           'The message port closed before a response was received',
@@ -59,6 +54,7 @@
           'extension context invalidated'
         ];
         
+        // Lỗi mạng
         const networkPatterns = [
           'Failed to load resource',
           'net::',
@@ -71,6 +67,7 @@
           'The connection to'
         ];
         
+        // Lỗi React
         const reactPatterns = [
           'Minified React error',
           'Element type is invalid',
@@ -82,171 +79,162 @@
           'Maximum update depth exceeded'
         ];
         
-        if (window._errorFilters.messagePortErrors && 
-            messagePortPatterns.some(pattern => message.includes(pattern))) {
-          window._messagePortErrorCount++;
-          
-          // Nếu quá nhiều lỗi message port, thử refresh service worker
-          if (window._messagePortErrorCount >= window._maxMessagePortErrors) {
-            console.warn('Đã phát hiện quá nhiều lỗi message port. Thử refresh service worker...');
-            refreshServiceWorker();
-            window._messagePortErrorCount = 0;
-          }
-          
+        // Kiểm tra các mẫu lỗi message port
+        const isMessagePortError = messagePortPatterns.some(pattern => 
+          message && message.includes && message.includes(pattern)
+        );
+        
+        if (isMessagePortError) {
+          handleMessagePortError();
           return true;
         }
         
-        if (window._errorFilters.networkErrors && 
-            networkPatterns.some(pattern => message.includes(pattern))) {
-          return true;
-        }
+        // Kiểm tra các mẫu lỗi mạng
+        const isNetworkError = networkPatterns.some(pattern => 
+          message && message.includes && message.includes(pattern)
+        );
         
-        if (window._errorFilters.reactRenderErrors &&
-            reactPatterns.some(pattern => message.includes(pattern))) {
-          
-          // Đặc biệt xử lý lỗi React render
-          handleReactError(message);
+        if (isNetworkError) {
           return true;
         }
         
         return false;
       }
       
-      // Xử lý lỗi React đặc biệt
-      function handleReactError(message) {
-        console.warn('Phát hiện lỗi React:', message);
+      // Xử lý lỗi message port
+      function handleMessagePortError() {
+        const now = Date.now();
+        window._troubleshooter.messagePortErrorCount++;
+        window._troubleshooter.errorCount++;
         
-        // Thêm logic thử lại nếu cần
-        const currentTime = Date.now();
-        if (currentTime - window._lastErrorTimestamp > 10000) {
-          // Reset bộ đếm nếu lỗi xảy ra cách nhau hơn 10 giây
-          window._retryCounter = 0;
-        }
-        
-        window._lastErrorTimestamp = currentTime;
-        window._retryCounter++;
-        
-        if (window._retryCounter <= window._maxRetries) {
-          setTimeout(() => {
-            // Thử tải lại trang với tham số nocache
-            console.log(`Thử lại lần ${window._retryCounter}/${window._maxRetries}...`);
-            // Nếu là lần thử cuối cùng, tải lại trang
-            if (window._retryCounter === window._maxRetries) {
-              window.location.reload();
-            }
-          }, 1000 * Math.pow(2, window._retryCounter));
-        } else {
-          // Ngừng thử lại sau số lần quy định
-          console.error('Đã vượt quá số lần thử lại tối đa.');
-        }
-      }
-      
-      // Hàm refresh service worker
-      function refreshServiceWorker() {
-        if ('serviceWorker' in navigator) {
-          navigator.serviceWorker.getRegistrations().then(registrations => {
-            for (let registration of registrations) {
-              registration.update().catch(err => {
-                console.warn('Không thể cập nhật service worker:', err);
-              });
-            }
-          }).catch(err => {
-            console.warn('Không thể tìm thấy service worker registrations:', err);
-          });
+        // Nếu quá nhiều lỗi và đã đủ thời gian kể từ lần reload cuối
+        if (window._troubleshooter.messagePortErrorCount > window._troubleshooter.MAX_ERRORS_BEFORE_RELOAD &&
+            (now - window._troubleshooter.lastReloadTime) > window._troubleshooter.MIN_RELOAD_INTERVAL) {
+          
+          // Đánh dấu thời gian reload
+          window._troubleshooter.lastReloadTime = now;
+          window._troubleshooter.messagePortErrorCount = 0;
+          
+          // Nếu đang trong chế độ debug, chỉ log ra lỗi
+          if (window._troubleshooter.isDebugging) {
+            console.warn('DEBUG MODE: Đã phát hiện nhiều lỗi message port, nhưng không tải lại vì đang trong chế độ debug');
+            return;
+          }
+          
+          console.warn('Đã phát hiện quá nhiều lỗi message port. Tải lại trang để khắc phục...');
+          
+          // Tải lại trang với tham số recovery để biết đây là lần tải lại do lỗi
+          const currentLocation = window.location.href.split('?')[0];
+          window.location.href = currentLocation + '?recovery=true&nocache=' + Date.now();
         }
       }
       
-      // Log lỗi một cách thông minh
-      function logErrorSafely(error, type) {
-        if (!window._errorsLog) window._errorsLog = [];
+      // Hàm xử lý lỗi JavaScript chung
+      function handleJavaScriptError(error, source) {
+        const now = Date.now();
+        window._troubleshooter.errorCount++;
         
-        // Nếu là cùng một lỗi lặp lại, chỉ tăng counter
-        const similarError = window._errorsLog.find(e => 
-          e.message === error.message && e.type === error.type
-        );
-        
-        if (similarError) {
-          similarError.count = (similarError.count || 1) + 1;
-          similarError.lastTimestamp = new Date().toISOString();
+        // Ngăn xử lý đệ quy
+        if (window._troubleshooter.isHandlingError) {
           return;
         }
         
-        // Giới hạn số lượng lỗi được lưu trữ (tối đa 100)
-        if (window._errorsLog.length > 100) {
-          window._errorsLog.shift();
+        window._troubleshooter.isHandlingError = true;
+        try {
+          // Reset lỗi nếu đã quá thời gian
+          if (now - window._troubleshooter.lastErrorTime > 60000) {
+            window._troubleshooter.errorCount = 1;
+          }
+          window._troubleshooter.lastErrorTime = now;
+          
+          // Lưu lỗi vào danh sách
+          const errorInfo = {
+            message: error.message || String(error),
+            source: source,
+            timestamp: now
+          };
+          window._troubleshooter.errors.push(errorInfo);
+          
+          // Giới hạn kích thước mảng lỗi
+          if (window._troubleshooter.errors.length > 50) {
+            window._troubleshooter.errors.shift();
+          }
+          
+          // Nếu quá nhiều lỗi trong thời gian ngắn
+          if (window._troubleshooter.errorCount > window._troubleshooter.MAX_ERRORS_BEFORE_RELOAD &&
+              (now - window._troubleshooter.lastReloadTime) > window._troubleshooter.MIN_RELOAD_INTERVAL) {
+            
+            if (window._troubleshooter.isDebugging) {
+              console.warn('DEBUG MODE: Đã phát hiện nhiều lỗi JS, nhưng không tải lại vì đang trong chế độ debug');
+              return;
+            }
+            
+            console.warn('Đã phát hiện quá nhiều lỗi JavaScript. Tải lại trang để khắc phục...');
+            
+            // Tải lại trang
+            window._troubleshooter.lastReloadTime = now;
+            const currentLocation = window.location.href.split('?')[0];
+            window.location.href = currentLocation + '?recovery=true&nocache=' + Date.now();
+          }
+        } finally {
+          window._troubleshooter.isHandlingError = false;
         }
-        
-        window._errorsLog.push({
-          ...error,
-          count: 1,
-          type: type,
-          timestamp: new Date().toISOString()
-        });
       }
       
-      // Chặn tất cả lỗi console.error liên quan đến message port và 404
+      // Ghi đè console.error để lọc lỗi
       (function() {
         const originalConsoleError = console.error;
         console.error = function(...args) {
-          // Không log các lỗi đã lọc
           if (args.length > 0 && typeof args[0] === 'string') {
             const errorMsg = args[0];
             
             if (shouldFilterError(errorMsg)) {
-              logErrorSafely({ message: errorMsg }, 'console.error');
+              // Không hiển thị lỗi đã lọc
               return;
             }
+            
+            // Thử xử lý các lỗi JavaScript khác
+            handleJavaScriptError({ message: errorMsg }, 'console.error');
           }
+          
+          // Hiển thị lỗi bình thường
           originalConsoleError.apply(console, args);
         };
-        
-        // Ghi đè console.warn
-        const originalConsoleWarn = console.warn;
-        console.warn = function(...args) {
-          if (args.length > 0 && typeof args[0] === 'string') {
-            const warnMsg = args[0];
-            if (shouldFilterError(warnMsg)) {
-              logErrorSafely({ message: warnMsg }, 'console.warn');
-              return;
-            }
-          }
-          originalConsoleWarn.apply(console, args);
-        };
       })();
-
-      // Xử lý tất cả lỗi JS với event listeners
+      
+      // Bắt lỗi JavaScript
       window.addEventListener('error', function(event) {
-        // Bắt lỗi JS
+        // Lỗi trong JavaScript
         if (event.message) {
           if (shouldFilterError(event.message)) {
-            logErrorSafely({
-              message: event.message,
-              file: event.filename,
-              line: event.lineno
-            }, 'js.error');
             event.preventDefault();
             return false;
           }
+          
+          // Xử lý các lỗi khác
+          handleJavaScriptError({
+            message: event.message,
+            filename: event.filename,
+            lineno: event.lineno,
+            colno: event.colno
+          }, 'window.error');
         }
         
-        // Bắt lỗi tài nguyên
-        if (event.target && window._errorFilters.resourceErrors && (
-            event.target.tagName === 'LINK' || 
+        // Lỗi tài nguyên (script, css, img, etc.)
+        if (event.target && (
             event.target.tagName === 'SCRIPT' || 
-            event.target.tagName === 'IMG'
-          )) {
-          logErrorSafely({
-            element: event.target.tagName,
-            source: event.target.src || event.target.href
-          }, 'resource.error');
+            event.target.tagName === 'LINK' || 
+            event.target.tagName === 'IMG')) {
+          // Lọc lỗi tài nguyên không quan trọng
           event.preventDefault();
           return false;
         }
       }, true);
-
-      // Bắt tất cả promise rejection không xử lý
+      
+      // Bắt Promise rejection không được xử lý
       window.addEventListener('unhandledrejection', function(event) {
         let message = 'Unknown promise error';
+        
         if (event.reason) {
           if (typeof event.reason === 'string') {
             message = event.reason;
@@ -258,67 +246,55 @@
         }
         
         if (shouldFilterError(message)) {
-          logErrorSafely({ message: message }, 'promise.rejection');
           event.preventDefault();
           return false;
         }
+        
+        // Xử lý rejection như lỗi JavaScript
+        handleJavaScriptError({ 
+          message: message,
+          reason: event.reason
+        }, 'promise.rejection');
       });
-
-      // Biến cho biết đã truy cập vào trang trước đó hay chưa
+      
+      // Kiểm tra trạng thái mạng
+      function updateOnlineStatus() {
+        if (navigator.onLine) {
+          console.log('Kết nối mạng đã được khôi phục');
+          // Có thể thực hiện các hành động khi kết nối được khôi phục
+        } else {
+          console.warn('Mất kết nối mạng. Một số tính năng có thể không hoạt động');
+        }
+      }
+      
+      window.addEventListener('online', updateOnlineStatus);
+      window.addEventListener('offline', updateOnlineStatus);
+      
+      // Check và ghi log phiên bản của ứng dụng
       try {
-        sessionStorage.setItem('app_visited', 'true');
-      } catch (e) {
-        console.warn('Không thể truy cập sessionStorage');
-      }
-      
-      // Kiểm tra và sửa URL nếu cần
-      function fixHistoryAndUrl() {
-        if (window.location.pathname !== '/' && !window.location.pathname.includes('.')) {
-          if (window.history && window.history.replaceState) {
-            // Tạo URL mới không có hash fragment
-            const newUrl = window.location.origin + window.location.pathname + window.location.search;
-            window.history.replaceState(
-              { path: newUrl }, 
-              document.title, 
-              newUrl
-            );
-            
-            // Log thông tin
-            logErrorSafely({
-              from: window.location.href,
-              to: newUrl
-            }, 'url.fixed');
+        const appVersion = localStorage.getItem('app_version');
+        const currentVersion = '%REACT_APP_VERSION%' || '1.0.0';
+        
+        if (appVersion && appVersion !== currentVersion) {
+          console.log(`Phiên bản ứng dụng đã thay đổi: ${appVersion} -> ${currentVersion}`);
+          localStorage.setItem('app_version', currentVersion);
+          
+          // Xóa cache nếu phiên bản thay đổi
+          if ('caches' in window) {
+            caches.keys().then(cacheNames => {
+              return Promise.all(
+                cacheNames.map(cacheName => {
+                  return caches.delete(cacheName);
+                })
+              );
+            });
           }
+        } else if (!appVersion) {
+          localStorage.setItem('app_version', currentVersion);
         }
+      } catch (e) {
+        // Bỏ qua lỗi localStorage
       }
-      
-      // Thêm tiện ích gỡ lỗi
-      function addDebugTools() {
-        if (window.location.search.includes('debug=true')) {
-          var debugDiv = document.createElement('div');
-          debugDiv.style.position = 'fixed';
-          debugDiv.style.bottom = '10px';
-          debugDiv.style.right = '10px';
-          debugDiv.style.zIndex = '9999';
-          debugDiv.style.background = 'rgba(0,0,0,0.7)';
-          debugDiv.style.color = 'white';
-          debugDiv.style.padding = '5px 10px';
-          debugDiv.style.borderRadius = '4px';
-          debugDiv.style.fontSize = '12px';
-          debugDiv.style.cursor = 'pointer';
-          debugDiv.textContent = 'Debug';
-          debugDiv.addEventListener('click', function() {
-            window.location.href = '/debug.html?errors=' + encodeURIComponent(JSON.stringify(window._errorsLog));
-          });
-          document.body.appendChild(debugDiv);
-        }
-      }
-      
-      // Chạy khi DOM đã tải
-      document.addEventListener('DOMContentLoaded', function() {
-        fixHistoryAndUrl();
-        addDebugTools();
-      });
     </script>
   </head>
   <body>
