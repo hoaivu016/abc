@@ -35,60 +35,54 @@
         throw new Error('Không thể tạo tài khoản');
       }
 
-      // 3. Đợi một chút để trigger xử lý xong
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      // 4. Kiểm tra xem user đã được tạo trong bảng users chưa
-      const { data: newUser, error: checkError } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', authData.user.id)
-        .single();
-
-      if (checkError) {
-        console.error('Lỗi kiểm tra user:', checkError);
-        throw new Error(checkError.message);
-      }
-
-      // 5. Nếu role khác với role mặc định, cập nhật role
-      if (newUser && newUser.role !== values.role) {
-        const { error: updateError } = await supabase
+      // 3. Sử dụng polling thay vì setTimeout
+      let retries = 0;
+      const maxRetries = 5;
+      
+      while (retries < maxRetries) {
+        const { data: newUser, error: checkError } = await supabase
           .from('users')
-          .update({ role: values.role })
-          .eq('id', authData.user.id);
+          .select('*')
+          .eq('id', authData.user.id)
+          .single();
+        
+        if (newUser) {
+          // User đã được tạo thành công
+          if (newUser.role !== values.role) {
+            const { error: updateError } = await supabase
+              .from('users')
+              .update({ role: values.role })
+              .eq('id', authData.user.id);
 
-        if (updateError) {
-          console.error('Lỗi cập nhật role:', updateError);
-          throw new Error(updateError.message);
+            if (updateError) {
+              console.error('Lỗi cập nhật role:', updateError);
+              throw new Error(updateError.message);
+            }
+          }
+          break;
         }
+        
+        retries++;
+        await new Promise(resolve => setTimeout(resolve, 1000));
       }
 
-      // 6. Cập nhật danh sách người dùng
-      const { data: users, error: fetchError } = await supabase
-        .from('users')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (fetchError) {
-        console.error('Lỗi lấy danh sách người dùng:', fetchError);
-        throw new Error(fetchError.message);
+      if (retries === maxRetries) {
+        throw new Error('Không thể xác nhận tạo tài khoản');
       }
 
-      setUsers(users || []);
+      // Refresh danh sách users
+      await fetchUsers();
+      
+      // Đóng form và hiển thị thông báo thành công
+      formik.resetForm();
       setSnackbar({
         open: true,
         message: 'Tạo tài khoản thành công',
         severity: 'success'
       });
-      formik.resetForm();
-    } catch (error: any) {
-      console.error('Lỗi khi tạo tài khoản:', error);
-      setError(error.message || 'Có lỗi xảy ra khi tạo tài khoản');
-      setSnackbar({
-        open: true,
-        message: error.message || 'Có lỗi xảy ra khi tạo tài khoản',
-        severity: 'error'
-      });
+    } catch (error) {
+      console.error('Lỗi tạo tài khoản:', error);
+      setError(error instanceof Error ? error.message : 'Lỗi không xác định');
     } finally {
       setLoading(false);
     }

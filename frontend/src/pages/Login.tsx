@@ -12,7 +12,7 @@ import {
   IconButton
 } from '@mui/material';
 import { Visibility, VisibilityOff } from '@mui/icons-material';
-import { supabase } from '../lib/database/supabase';
+import { supabase, getCurrentSession, handleAuthError } from '../lib/database/supabase';
 import { useNavigate } from 'react-router-dom';
 import { useDispatch } from 'react-redux';
 import { login } from '../store/slices/authSlice';
@@ -38,36 +38,38 @@ const Login: React.FC = () => {
       setLoading(true);
       setError(null);
       
+      // 1. Kiểm tra session hiện tại và logout nếu cần
+      const currentSession = await getCurrentSession();
+      if (currentSession) {
+        await supabase.auth.signOut();
+      }
+      
+      // 2. Thực hiện đăng nhập
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password
       });
       
-      if (error) {
-        console.error('Lỗi đăng nhập:', error);
-        setError(error.message === 'Invalid login credentials' 
-          ? 'Email hoặc mật khẩu không chính xác' 
-          : error.message);
-        return;
-      }
+      if (error) throw error;
+      if (!data?.session) throw new Error('No session data');
       
-      if (!data?.session) {
-        setError('Không thể đăng nhập. Vui lòng thử lại sau.');
-        return;
-      }
-      
-      // Lấy thông tin user từ bảng users
+      // 3. Kiểm tra user trong database
       const { data: userData, error: userError } = await supabase
         .from('users')
         .select('*')
         .eq('id', data.user.id)
         .single();
-      
-      if (userError && userError.code !== 'PGRST116') {
-        console.error('Lỗi lấy thông tin người dùng:', userError);
+        
+      if (userError) {
+        const handled = await handleAuthError(userError);
+        if (handled) {
+          // Thử lại sau khi xử lý lỗi
+          return handleLogin(e);
+        }
+        throw userError;
       }
       
-      // Lưu thông tin đăng nhập vào Redux store
+      // 4. Dispatch login action
       dispatch(login({
         user: {
           id: data.user.id,
@@ -77,15 +79,15 @@ const Login: React.FC = () => {
         token: data.session.access_token
       }));
       
-      // Lưu token vào localStorage để duy trì đăng nhập
+      // 5. Lưu token vào localStorage
       localStorage.setItem('supabase.auth.token', data.session.access_token);
       
-      // Chuyển hướng đến trang chính
+      // 6. Chuyển hướng đến trang chính
       navigate('/');
       
     } catch (err) {
-      console.error('Lỗi không xác định:', err);
-      setError('Đã xảy ra lỗi không mong muốn. Vui lòng thử lại sau.');
+      console.error('Lỗi đăng nhập:', err);
+      setError(err instanceof Error ? err.message : 'Đã xảy ra lỗi không mong muốn. Vui lòng thử lại sau.');
     } finally {
       setLoading(false);
     }

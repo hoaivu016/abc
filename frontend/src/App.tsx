@@ -74,6 +74,9 @@ import { useVehicleDelete } from './hooks/useVehicleDelete';
 import { checkSupabaseConnection } from './lib/database/supabase';
 // Import component quản lý tài khoản
 import AccountManagement from './modules/accounts/components/AccountManagement';
+import { getCurrentSession } from './lib/auth/auth';
+import { logout } from './redux/actions/authActions';
+import { useDispatch } from 'react-redux';
 
 // Định nghĩa interface cho các tab
 interface TabPanelProps {
@@ -175,6 +178,7 @@ function App() {
   const navigate = useNavigate();
   const location = useLocation();
   const isAuthenticated = useSelector((state: any) => state.auth.isAuthenticated);
+  const dispatch = useDispatch();
 
   // State chính của ứng dụng
   const [state, setState] = useState<AppState>({
@@ -256,7 +260,37 @@ function App() {
     testSupabaseConnection();
   }, []);
 
-  // Kiểm tra xác thực và chuyển hướng
+  // Khởi tạo ứng dụng
+  const initializeApp = async () => {
+    try {
+      setIsLoading(true);
+      // 1. Kiểm tra session hiện tại
+      const session = await getCurrentSession();
+      
+      // 2. Nếu có session, kiểm tra token validity
+      if (session) {
+        const isValid = await checkSupabaseConnection();
+        if (!isValid) {
+          // Nếu token không hợp lệ, logout
+          await supabase.auth.signOut();
+          dispatch(logout());
+        }
+      }
+      
+      setLoading(false);
+    } catch (error) {
+      console.error('Lỗi khởi tạo ứng dụng:', error);
+      setError(error instanceof Error ? error.message : 'Lỗi không xác định');
+      setLoading(false);
+    }
+  };
+
+  // Effect khởi tạo ứng dụng
+  useEffect(() => {
+    initializeApp();
+  }, []);
+
+  // Effect kiểm tra xác thực và chuyển hướng
   useEffect(() => {
     if (!isAuthenticated && location.pathname !== '/login') {
       navigate('/login');
