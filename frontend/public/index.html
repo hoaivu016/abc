@@ -16,6 +16,90 @@
     <script>
       // Biến toàn cục để lưu trữ các lỗi
       window._errorsLog = [];
+      window._errorFilters = {
+        enabled: true,
+        messagePortErrors: true,
+        networkErrors: true,
+        resourceErrors: true
+      };
+      
+      // Kiểm tra tham số URL để bật/tắt bộ lọc lỗi
+      function updateErrorFilters() {
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.has('nofilter')) {
+          window._errorFilters.enabled = false;
+        }
+        if (urlParams.has('shownetwork')) {
+          window._errorFilters.networkErrors = false;
+        }
+        if (urlParams.has('showport')) {
+          window._errorFilters.messagePortErrors = false;
+        }
+      }
+      updateErrorFilters();
+      
+      // Hàm kiểm tra xem lỗi có cần lọc không
+      function shouldFilterError(message) {
+        if (!window._errorFilters.enabled) return false;
+        
+        const messagePortPatterns = [
+          'message port closed',
+          'port closed',
+          'extension context invalidated'
+        ];
+        
+        const networkPatterns = [
+          'Failed to load resource',
+          'net::',
+          'Network Error',
+          'Failed to fetch',
+          'NetworkError',
+          'ChunkLoadError',
+          'Loading CSS chunk',
+          'Loading chunk',
+          'The connection to'
+        ];
+        
+        if (window._errorFilters.messagePortErrors && 
+            messagePortPatterns.some(pattern => message.includes(pattern))) {
+          return true;
+        }
+        
+        if (window._errorFilters.networkErrors && 
+            networkPatterns.some(pattern => message.includes(pattern))) {
+          return true;
+        }
+        
+        return false;
+      }
+      
+      // Log lỗi một cách thông minh
+      function logErrorSafely(error, type) {
+        if (!window._errorsLog) window._errorsLog = [];
+        
+        // Nếu là cùng một lỗi lặp lại, chỉ tăng counter
+        const similarError = window._errorsLog.find(e => 
+          e.message === error.message && e.type === error.type
+        );
+        
+        if (similarError) {
+          similarError.count = (similarError.count || 1) + 1;
+          similarError.lastTimestamp = new Date().toISOString();
+          return;
+        }
+        
+        // Giới hạn số lượng lỗi được lưu trữ (tối đa 100)
+        if (window._errorsLog.length > 100) {
+          window._errorsLog.shift();
+        }
+        
+        window._errorsLog.push({
+          ...error,
+          count: 1,
+          type: type,
+          timestamp: new Date().toISOString()
+        });
+      }
       
       // Chặn tất cả lỗi console.error liên quan đến message port và 404
       (function() {
@@ -25,26 +109,8 @@
           if (args.length > 0 && typeof args[0] === 'string') {
             const errorMsg = args[0];
             
-            // Danh sách các lỗi cần lọc
-            const errorsToFilter = [
-              'message port closed', 
-              'Failed to load resource: net::', 
-              'Network Error',
-              'Failed to fetch',
-              'NetworkError',
-              'ChunkLoadError',
-              'Loading CSS chunk',
-              'Loading chunk',
-              'The connection to'
-            ];
-            
-            // Kiểm tra nếu lỗi nằm trong danh sách cần lọc
-            if (errorsToFilter.some(err => errorMsg.includes(err))) {
-              window._errorsLog.push({
-                type: 'console.error',
-                message: errorMsg,
-                timestamp: new Date().toISOString()
-              });
+            if (shouldFilterError(errorMsg)) {
+              logErrorSafely({ message: errorMsg }, 'console.error');
               return;
             }
           }
@@ -56,12 +122,8 @@
         console.warn = function(...args) {
           if (args.length > 0 && typeof args[0] === 'string') {
             const warnMsg = args[0];
-            if (warnMsg.includes('message port') || warnMsg.includes('net::')) {
-              window._errorsLog.push({
-                type: 'console.warn',
-                message: warnMsg,
-                timestamp: new Date().toISOString()
-              });
+            if (shouldFilterError(warnMsg)) {
+              logErrorSafely({ message: warnMsg }, 'console.warn');
               return;
             }
           }
@@ -73,33 +135,27 @@
       window.addEventListener('error', function(event) {
         // Bắt lỗi JS
         if (event.message) {
-          if (event.message.includes('message port closed') || 
-              event.message.includes('Failed to load') ||
-              event.message.includes('NetworkError')) {
-            window._errorsLog.push({
-              type: 'js.error',
+          if (shouldFilterError(event.message)) {
+            logErrorSafely({
               message: event.message,
               file: event.filename,
-              line: event.lineno,
-              timestamp: new Date().toISOString()
-            });
+              line: event.lineno
+            }, 'js.error');
             event.preventDefault();
             return false;
           }
         }
         
         // Bắt lỗi tài nguyên
-        if (event.target && (
+        if (event.target && window._errorFilters.resourceErrors && (
             event.target.tagName === 'LINK' || 
             event.target.tagName === 'SCRIPT' || 
             event.target.tagName === 'IMG'
           )) {
-          window._errorsLog.push({
-            type: 'resource.error',
+          logErrorSafely({
             element: event.target.tagName,
-            source: event.target.src || event.target.href,
-            timestamp: new Date().toISOString()
-          });
+            source: event.target.src || event.target.href
+          }, 'resource.error');
           event.preventDefault();
           return false;
         }
@@ -118,15 +174,8 @@
           }
         }
         
-        if (message.includes('message port') || 
-            message.includes('Failed to fetch') || 
-            message.includes('NetworkError') ||
-            message.includes('Network Error')) {
-          window._errorsLog.push({
-            type: 'promise.rejection',
-            message: message,
-            timestamp: new Date().toISOString()
-          });
+        if (shouldFilterError(message)) {
+          logErrorSafely({ message: message }, 'promise.rejection');
           event.preventDefault();
           return false;
         }
@@ -152,12 +201,10 @@
             );
             
             // Log thông tin
-            window._errorsLog.push({
-              type: 'url.fixed',
+            logErrorSafely({
               from: window.location.href,
-              to: newUrl,
-              timestamp: new Date().toISOString()
-            });
+              to: newUrl
+            }, 'url.fixed');
           }
         }
       }
@@ -195,48 +242,81 @@
     <noscript>Bạn cần bật JavaScript để chạy ứng dụng này.</noscript>
     <div id="root"></div>
     <script>
+      // Biến kiểm soát service worker
+      window._serviceWorkerStatus = {
+        registered: false,
+        failed: false,
+        errorMessage: null
+      };
+      
       // Đăng ký service worker - xử lý triệt để lỗi
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', function() {
-          navigator.serviceWorker.register('/service-worker.js', { 
-            scope: '/',
-            updateViaCache: 'none'
-          })
-          .then(function(registration) {
-            console.log('ServiceWorker đăng ký thành công:', registration.scope);
-            
-            // Cập nhật service worker nếu có phiên bản mới
-            registration.addEventListener('updatefound', function() {
-              console.log('Đang cài đặt ServiceWorker mới...');
-              const newWorker = registration.installing;
-              
-              newWorker.addEventListener('statechange', function() {
-                console.log('ServiceWorker trạng thái mới:', newWorker.state);
+          // Hàm kiểm tra nếu có bản cập nhật mới của SW
+          function checkForSWUpdate(registration) {
+            registration.update()
+              .then(() => console.log('Kiểm tra cập nhật SW'))
+              .catch(err => {
+                // Chỉ lưu lỗi, không làm gì thêm
+                logErrorSafely({ message: err.message }, 'sw.update.error');
               });
+          }
+          
+          // Hàm xử lý tin nhắn từ SW
+          function setupSWMessageHandling() {
+            navigator.serviceWorker.addEventListener('message', function(event) {
+              if (event && event.data) {
+                console.log('Nhận tin nhắn từ SW:', event.data);
+              }
             });
             
-            // Kiểm tra update
-            setInterval(function() {
-              registration.update()
-                .catch(function() {
-                  // Bỏ qua lỗi khi cập nhật
-                });
-            }, 60 * 60 * 1000); // Kiểm tra mỗi giờ
-          })
-          .catch(function(error) {
-            // Chỉ log lỗi, không dừng ứng dụng
-            console.log('Lỗi đăng ký ServiceWorker:', error);
-          });
+            // Xử lý controller change
+            navigator.serviceWorker.addEventListener('controllerchange', function() {
+              console.log('SW mới đang điều khiển trang');
+            });
+          }
           
-          // Xử lý khi controller thay đổi (service worker mới)
-          navigator.serviceWorker.addEventListener('controllerchange', function() {
-            console.log('ServiceWorker mới đang điều khiển trang');
-          });
+          // Hàm đăng ký SW
+          function registerServiceWorker() {
+            navigator.serviceWorker.register('/service-worker.js', { 
+              scope: '/',
+              updateViaCache: 'none'
+            })
+            .then(function(registration) {
+              window._serviceWorkerStatus.registered = true;
+              console.log('SW đăng ký thành công:', registration.scope);
+              
+              // Thiết lập kiểm tra định kỳ
+              setInterval(() => checkForSWUpdate(registration), 60 * 60 * 1000);
+              
+              // Xử lý cài đặt mới
+              registration.addEventListener('updatefound', function() {
+                const newWorker = registration.installing;
+                if (newWorker) {
+                  newWorker.addEventListener('statechange', function() {
+                    console.log('SW trạng thái mới:', newWorker.state);
+                  });
+                }
+              });
+            })
+            .catch(function(error) {
+              window._serviceWorkerStatus.failed = true;
+              window._serviceWorkerStatus.errorMessage = error.message;
+              
+              logErrorSafely({ 
+                message: error.message,
+                stack: error.stack 
+              }, 'sw.registration.error');
+              
+              console.log('Lỗi đăng ký SW:', error);
+            });
+          }
           
-          // Xử lý message từ service worker
-          navigator.serviceWorker.addEventListener('message', function(event) {
-            console.log('Nhận message từ ServiceWorker:', event.data);
-          });
+          // Thiết lập message handling trước
+          setupSWMessageHandling();
+          
+          // Sau đó đăng ký SW
+          registerServiceWorker();
         });
       }
       
@@ -259,12 +339,10 @@
               const options = arguments[1] || {};
               
               // Log lỗi
-              window._errorsLog.push({
-                type: 'fetch.error',
-                url: typeof url === 'string' ? url : url.url,
-                message: err.message,
-                timestamp: new Date().toISOString()
-              });
+              logErrorSafely({
+                url: typeof url === 'string' ? url : (url.url || 'unknown'),
+                message: err.message
+              }, 'fetch.error');
               
               // Không thử lại với các method không phải GET
               if (options.method && options.method !== 'GET') {
@@ -275,11 +353,22 @@
               return new Promise(function(resolve, reject) {
                 var xhr = new XMLHttpRequest();
                 xhr.open('GET', typeof url === 'string' ? url : url.url);
+                
+                // Thêm các headers từ fetch options
+                if (options.headers) {
+                  Object.entries(options.headers).forEach(([key, value]) => {
+                    xhr.setRequestHeader(key, value);
+                  });
+                }
+                
                 xhr.onload = function() {
                   if (xhr.status >= 200 && xhr.status < 300) {
                     resolve(new Response(xhr.response, {
                       status: xhr.status,
-                      statusText: xhr.statusText
+                      statusText: xhr.statusText,
+                      headers: new Headers({
+                        'Content-Type': xhr.getResponseHeader('Content-Type') || 'text/plain'
+                      })
                     }));
                   } else {
                     reject(new Error('XHR failed: ' + xhr.statusText));

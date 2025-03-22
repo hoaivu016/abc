@@ -10,11 +10,15 @@
       "headers": [
         {
           "key": "Cache-Control",
-          "value": "public, max-age=0, must-revalidate"
+          "value": "no-cache, no-store, must-revalidate"
         },
         {
           "key": "Service-Worker-Allowed",
           "value": "/"
+        },
+        {
+          "key": "Content-Type",
+          "value": "application/javascript; charset=utf-8"
         }
       ]
     },
@@ -33,6 +37,37 @@
         {
           "key": "Cache-Control",
           "value": "no-cache, no-store, must-revalidate"
+        }
+      ]
+    },
+    {
+      "source": "/offline.html",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache, no-store, must-revalidate"
+        }
+      ]
+    },
+    {
+      "source": "/404.html",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache, no-store, must-revalidate"
+        }
+      ]
+    },
+    {
+      "source": "/manifest.json",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=3600"
+        },
+        {
+          "key": "Content-Type", 
+          "value": "application/manifest+json; charset=utf-8"
         }
       ]
     },
@@ -67,6 +102,10 @@
         {
           "key": "Permissions-Policy",
           "value": "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()"
+        },
+        {
+          "key": "Cross-Origin-Opener-Policy",
+          "value": "same-origin"
         }
       ]
     }
@@ -90,9 +129,19 @@
     {
       "src": "/service-worker.js",
       "headers": {
-        "Cache-Control": "public, max-age=0, must-revalidate",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
         "Service-Worker-Allowed": "/"
       },
+      "dest": "/service-worker.js",
+      "continue": true
+    },
+    {
+      "src": "/manifest.json",
+      "headers": {
+        "Cache-Control": "public, max-age=3600",
+        "Content-Type": "application/manifest+json; charset=utf-8"
+      },
+      "dest": "/manifest.json",
       "continue": true
     },
     {
@@ -100,6 +149,7 @@
       "headers": {
         "Cache-Control": "no-cache, no-store, must-revalidate"
       },
+      "dest": "/debug.html",
       "continue": true
     },
     {
@@ -107,6 +157,7 @@
       "headers": {
         "Cache-Control": "no-cache, no-store, must-revalidate"
       },
+      "dest": "/debug-vercel.html",
       "continue": true
     },
     {
@@ -114,6 +165,7 @@
       "headers": {
         "Cache-Control": "no-cache, no-store, must-revalidate"
       },
+      "dest": "/offline.html",
       "continue": true
     },
     {
@@ -121,10 +173,18 @@
       "headers": {
         "Cache-Control": "no-cache, no-store, must-revalidate"
       },
+      "dest": "/404.html",
       "continue": true
     },
     {
       "src": "/static/(.*)",
+      "headers": {
+        "Cache-Control": "public, max-age=31536000, immutable"
+      },
+      "continue": true
+    },
+    {
+      "src": "/(.*)\\.(?:js|css|jpg|jpeg|gif|png|ico|svg|woff|woff2|ttf|otf)$",
       "headers": {
         "Cache-Control": "public, max-age=31536000, immutable"
       },
