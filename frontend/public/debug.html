@@ -1,1 +1,634 @@
- 
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Debug - Vehicle Management</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      background-color: #f9fafb;
+      color: #333;
+    }
+    h1 {
+      color: #1976d2;
+      border-bottom: 1px solid #e0e0e0;
+      padding-bottom: 10px;
+    }
+    h2 {
+      color: #2c3e50;
+      margin-top: 30px;
+    }
+    .card {
+      background-color: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      padding: 15px;
+      margin-bottom: 20px;
+    }
+    .log-entry {
+      border-bottom: 1px solid #eee;
+      padding: 10px 0;
+      font-family: monospace;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    .error { color: #e53935; }
+    .warning { color: #ff9800; }
+    .info { color: #2196f3; }
+    .success { color: #4caf50; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 20px 0;
+    }
+    th, td {
+      text-align: left;
+      padding: 8px;
+      border-bottom: 1px solid #eee;
+    }
+    th {
+      background-color: #f5f5f5;
+    }
+    button {
+      background-color: #1976d2;
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 4px;
+      cursor: pointer;
+      margin-right: 8px;
+      font-size: 14px;
+    }
+    button:hover {
+      background-color: #1565c0;
+    }
+    #status {
+      margin-bottom: 20px;
+    }
+    .status-badge {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-weight: bold;
+      margin-right: 10px;
+    }
+    .status-online {
+      background-color: #e8f5e9;
+      color: #2e7d32;
+    }
+    .status-offline {
+      background-color: #ffebee;
+      color: #c62828;
+    }
+    .actions {
+      margin: 10px 0;
+    }
+    .pill {
+      display: inline-block;
+      background: #f3f4f6;
+      padding: 2px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+      margin-right: 5px;
+      margin-bottom: 5px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Vehicle Management Debug</h1>
+  
+  <div id="status"></div>
+  
+  <div class="card">
+    <h2>Thông tin môi trường</h2>
+    <table id="envInfo">
+      <tr>
+        <th>Thuộc tính</th>
+        <th>Giá trị</th>
+      </tr>
+      <tr>
+        <td>URL hiện tại</td>
+        <td id="currentUrl"></td>
+      </tr>
+      <tr>
+        <td>Thời gian</td>
+        <td id="currentTime"></td>
+      </tr>
+      <tr>
+        <td>Local Storage</td>
+        <td id="localStorageStatus"></td>
+      </tr>
+      <tr>
+        <td>Session Storage</td>
+        <td id="sessionStorageStatus"></td>
+      </tr>
+      <tr>
+        <td>Cookie Enabled</td>
+        <td id="cookieStatus"></td>
+      </tr>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>Công cụ</h2>
+    <div class="actions">
+      <button id="clearLogs">Xóa logs</button>
+      <button id="testFetch">Test API</button>
+      <button id="checkServiceWorker">Kiểm tra Service Worker</button>
+      <button id="clearCache">Xóa Cache</button>
+      <button id="clearStorage">Xóa Storage</button>
+      <button id="backToApp">Quay lại ứng dụng</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Thông tin hệ thống</h2>
+    <table id="sysInfo">
+      <tr>
+        <th width="30%">Thuộc tính</th>
+        <th>Giá trị</th>
+      </tr>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>Service Worker</h2>
+    <div id="swInfo">Đang kiểm tra...</div>
+  </div>
+
+  <div class="card">
+    <h2>Vercel Config</h2>
+    <div id="vercelInfo">
+      <p>Kiểm tra cấu hình trên Vercel:</p>
+      <ul>
+        <li>Tạo file <code>vercel.json</code> với rewrites</li>
+        <li>Cấu hình headers cho Service Worker</li>
+        <li>Tạo trang 404.html và offline.html</li>
+      </ul>
+      <p>Thông tin từ manifest.json:</p>
+      <div id="manifestInfo">Đang tải...</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Nhật ký lỗi</h2>
+    <div class="actions">
+      <button id="filterAll">Tất cả</button>
+      <button id="filterConsole">Console</button>
+      <button id="filterJS">JavaScript</button>
+      <button id="filterResources">Tài nguyên</button>
+      <button id="filterFetch">Fetch</button>
+    </div>
+    <div id="errorStats"></div>
+    <div id="logs"></div>
+  </div>
+
+  <script>
+    // Phân tích query string
+    function getQueryParams() {
+      const params = {};
+      const query = window.location.search.substring(1);
+      const vars = query.split('&');
+      for (let i = 0; i < vars.length; i++) {
+        const pair = vars[i].split('=');
+        params[decodeURIComponent(pair[0])] = decodeURIComponent(pair[1] || '');
+      }
+      return params;
+    }
+    
+    // Parse JSON an toàn
+    function safeJSONParse(str) {
+      try {
+        return JSON.parse(str);
+      } catch (e) {
+        console.error('Lỗi parse JSON:', e);
+        return null;
+      }
+    }
+
+    // Lấy errors từ query param
+    const queryParams = getQueryParams();
+    const errorLogs = queryParams.errors ? safeJSONParse(queryParams.errors) : [];
+    
+    // Kiểm tra trạng thái kết nối
+    function updateOnlineStatus() {
+      const statusDiv = document.getElementById('status');
+      if (navigator.onLine) {
+        statusDiv.innerHTML = '<span class="status-badge status-online">Online</span> Đã kết nối mạng';
+      } else {
+        statusDiv.innerHTML = '<span class="status-badge status-offline">Offline</span> Không có kết nối mạng';
+      }
+    }
+
+    // Hiển thị thông tin môi trường
+    function updateEnvironmentInfo() {
+      document.getElementById('currentUrl').textContent = window.location.href;
+      document.getElementById('currentTime').textContent = new Date().toLocaleString();
+      document.getElementById('localStorageStatus').textContent = testLocalStorage() ? 'Hoạt động' : 'Không khả dụng';
+      document.getElementById('sessionStorageStatus').textContent = testSessionStorage() ? 'Hoạt động' : 'Không khả dụng';
+      document.getElementById('cookieStatus').textContent = navigator.cookieEnabled ? 'Enabled' : 'Disabled';
+    }
+    
+    // Kiểm tra localStorage
+    function testLocalStorage() {
+      try {
+        localStorage.setItem('test', 'test');
+        localStorage.removeItem('test');
+        return true;
+      } catch (e) {
+        return false;
+      }
+    }
+    
+    // Kiểm tra sessionStorage
+    function testSessionStorage() {
+      try {
+        sessionStorage.setItem('test', 'test');
+        sessionStorage.removeItem('test');
+        return true;
+      } catch (e) {
+        return false;
+      }
+    }
+
+    // Hiển thị thông tin hệ thống
+    function displaySystemInfo() {
+      const sysInfoTable = document.getElementById('sysInfo');
+      const info = [
+        { name: 'User Agent', value: navigator.userAgent },
+        { name: 'Platform', value: navigator.platform },
+        { name: 'Mobile', value: /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ? 'Yes' : 'No' },
+        { name: 'Screen Size', value: `${window.screen.width}x${window.screen.height}` },
+        { name: 'Viewport', value: `${window.innerWidth}x${window.innerHeight}` },
+        { name: 'Device Pixel Ratio', value: window.devicePixelRatio },
+        { name: 'Language', value: navigator.language },
+        { name: 'Service Worker', value: 'serviceWorker' in navigator ? 'Supported' : 'Not supported' },
+        { name: 'Fetch API', value: 'fetch' in window ? 'Supported' : 'Not supported' },
+        { name: 'IndexedDB', value: 'indexedDB' in window ? 'Supported' : 'Not supported' },
+        { name: 'Push API', value: 'PushManager' in window ? 'Supported' : 'Not supported' },
+        { name: 'Performance API', value: 'performance' in window ? 'Supported' : 'Not supported' }
+      ];
+
+      info.forEach(item => {
+        const row = document.createElement('tr');
+        const nameCell = document.createElement('td');
+        const valueCell = document.createElement('td');
+        
+        nameCell.textContent = item.name;
+        valueCell.textContent = item.value;
+        
+        row.appendChild(nameCell);
+        row.appendChild(valueCell);
+        sysInfoTable.appendChild(row);
+      });
+      
+      // Hiển thị thông tin bộ nhớ nếu có
+      if ('performance' in window && 'memory' in performance) {
+        const memoryRow = document.createElement('tr');
+        const memoryNameCell = document.createElement('td');
+        const memoryValueCell = document.createElement('td');
+        
+        memoryNameCell.textContent = 'Memory Usage';
+        
+        // Chuyển đổi từ byte sang MB
+        const usedJSHeapSize = Math.round(performance.memory.usedJSHeapSize / (1024 * 1024));
+        const totalJSHeapSize = Math.round(performance.memory.totalJSHeapSize / (1024 * 1024));
+        
+        memoryValueCell.textContent = `${usedJSHeapSize} MB / ${totalJSHeapSize} MB`;
+        
+        memoryRow.appendChild(memoryNameCell);
+        memoryRow.appendChild(memoryValueCell);
+        sysInfoTable.appendChild(memoryRow);
+      }
+    }
+
+    // Kiểm tra Service Worker
+    function checkServiceWorker() {
+      const swInfoDiv = document.getElementById('swInfo');
+      
+      if (!('serviceWorker' in navigator)) {
+        swInfoDiv.innerHTML = '<p class="error">Trình duyệt này không hỗ trợ Service Worker</p>';
+        return;
+      }
+      
+      swInfoDiv.innerHTML = 'Đang kiểm tra trạng thái Service Worker...';
+      
+      navigator.serviceWorker.getRegistrations()
+        .then(registrations => {
+          if (registrations.length === 0) {
+            swInfoDiv.innerHTML = '<p class="warning">Không có Service Worker nào được đăng ký</p>';
+            return;
+          }
+          
+          let html = '<table><tr><th>Scope</th><th>Trạng thái</th><th>URL</th><th>Phiên bản</th></tr>';
+          
+          registrations.forEach(reg => {
+            let status = 'waiting';
+            if (reg.active) status = 'active';
+            else if (reg.installing) status = 'installing';
+            
+            // Lấy phiên bản từ URL
+            const workerUrl = reg.active ? reg.active.scriptURL : (reg.installing ? reg.installing.scriptURL : 'N/A');
+            const versionMatch = workerUrl.match(/cache-v(\d+)/);
+            const version = versionMatch ? versionMatch[1] : 'unknown';
+            
+            html += `
+              <tr>
+                <td>${reg.scope}</td>
+                <td>${status}</td>
+                <td>${workerUrl}</td>
+                <td>${version}</td>
+              </tr>
+            `;
+          });
+          
+          html += '</table><div class="actions" style="margin-top: 10px;">';
+          html += '<button id="unregisterSW">Hủy đăng ký Service Worker</button>';
+          html += '<button id="updateSW">Cập nhật Service Worker</button>';
+          html += '</div>';
+          
+          swInfoDiv.innerHTML = html;
+          
+          document.getElementById('unregisterSW').addEventListener('click', function() {
+            Promise.all(registrations.map(r => r.unregister()))
+              .then(results => {
+                log('info', 'Đã hủy đăng ký Service Worker: ' + results.filter(Boolean).length + ' / ' + results.length);
+                checkServiceWorker();
+              });
+          });
+          
+          document.getElementById('updateSW').addEventListener('click', function() {
+            Promise.all(registrations.map(r => r.update()))
+              .then(() => {
+                log('info', 'Đã gửi yêu cầu cập nhật Service Worker');
+                setTimeout(checkServiceWorker, 1000);
+              });
+          });
+        })
+        .catch(error => {
+          swInfoDiv.innerHTML = `<p class="error">Lỗi khi kiểm tra Service Worker: ${error.message}</p>`;
+        });
+    }
+
+    // Kiểm tra manifest.json
+    function checkManifest() {
+      const manifestInfoDiv = document.getElementById('manifestInfo');
+      
+      fetch('/manifest.json')
+        .then(response => response.json())
+        .then(data => {
+          let html = '<dl>';
+          html += `<dt>Name:</dt><dd>${data.name || 'N/A'}</dd>`;
+          html += `<dt>Short Name:</dt><dd>${data.short_name || 'N/A'}</dd>`;
+          html += `<dt>Start URL:</dt><dd>${data.start_url || 'N/A'}</dd>`;
+          html += `<dt>Display:</dt><dd>${data.display || 'N/A'}</dd>`;
+          html += `<dt>Theme Color:</dt><dd>${data.theme_color || 'N/A'}</dd>`;
+          html += `<dt>Background Color:</dt><dd>${data.background_color || 'N/A'}</dd>`;
+          html += `<dt>Icons:</dt><dd>${data.icons ? data.icons.length + ' icons' : 'No icons'}</dd>`;
+          html += '</dl>';
+          
+          manifestInfoDiv.innerHTML = html;
+        })
+        .catch(error => {
+          manifestInfoDiv.innerHTML = `<p class="error">Lỗi khi tải manifest.json: ${error.message}</p>`;
+        });
+    }
+
+    // Kiểm tra tổng số lỗi theo loại
+    function updateErrorStats(errors) {
+      if (!errors || errors.length === 0) {
+        document.getElementById('errorStats').innerHTML = 'Không có lỗi nào được ghi nhận.';
+        return;
+      }
+      
+      // Phân loại lỗi
+      const stats = {
+        total: errors.length,
+        byType: {}
+      };
+      
+      errors.forEach(error => {
+        if (!stats.byType[error.type]) {
+          stats.byType[error.type] = 0;
+        }
+        stats.byType[error.type]++;
+      });
+      
+      // Tạo HTML hiển thị
+      let html = `<p>Tổng số lỗi: <strong>${stats.total}</strong></p><div>`;
+      
+      for (const [type, count] of Object.entries(stats.byType)) {
+        html += `<span class="pill">${type}: ${count}</span>`;
+      }
+      
+      html += '</div>';
+      document.getElementById('errorStats').innerHTML = html;
+    }
+
+    // Hiển thị log
+    function displayLogs(errors, filter = null) {
+      const logsDiv = document.getElementById('logs');
+      logsDiv.innerHTML = '';
+      
+      if (!errors || errors.length === 0) {
+        logsDiv.innerHTML = '<p>Không có lỗi nào được ghi nhận.</p>';
+        return;
+      }
+      
+      // Lọc lỗi nếu cần
+      let filteredErrors = errors;
+      if (filter) {
+        filteredErrors = errors.filter(error => error.type.includes(filter));
+      }
+      
+      if (filteredErrors.length === 0) {
+        logsDiv.innerHTML = '<p>Không có lỗi nào phù hợp với bộ lọc.</p>';
+        return;
+      }
+      
+      // Hiển thị từng lỗi
+      filteredErrors.reverse().forEach(error => {
+        const entry = document.createElement('div');
+        entry.className = `log-entry ${getClassForErrorType(error.type)}`;
+        
+        let content = `[${new Date(error.timestamp).toLocaleTimeString()}] [${error.type}] `;
+        
+        if (error.message) {
+          content += error.message;
+        } else if (error.element) {
+          content += `${error.element}: ${error.source || 'N/A'}`;
+        } else if (error.url) {
+          content += `${error.url}: ${error.message || 'N/A'}`;
+        } else if (error.from && error.to) {
+          content += `Redirected from ${error.from} to ${error.to}`;
+        }
+        
+        if (error.file) {
+          content += `\nFile: ${error.file}:${error.line || 'unknown'}`;
+        }
+        
+        entry.textContent = content;
+        logsDiv.appendChild(entry);
+      });
+    }
+    
+    // Xác định class dựa trên loại lỗi
+    function getClassForErrorType(type) {
+      if (type.includes('error')) return 'error';
+      if (type.includes('warn')) return 'warning';
+      if (type.includes('info')) return 'info';
+      if (type.includes('fix') || type.includes('url.fixed')) return 'success';
+      return '';
+    }
+
+    // Test API
+    function testAPI() {
+      log('info', 'Đang kiểm tra kết nối API...');
+      
+      fetch('/api/test')
+        .then(response => {
+          if (!response.ok) {
+            throw new Error(`Lỗi HTTP: ${response.status}`);
+          }
+          return response.json();
+        })
+        .then(data => {
+          log('success', 'Kết nối API thành công: ' + JSON.stringify(data));
+        })
+        .catch(error => {
+          log('error', 'Lỗi kết nối API: ' + error.message);
+        });
+    }
+
+    // Xóa cache
+    function clearAllCaches() {
+      if ('caches' in window) {
+        log('info', 'Đang xóa tất cả cache...');
+        
+        caches.keys()
+          .then(cacheNames => {
+            return Promise.all(
+              cacheNames.map(cacheName => {
+                return caches.delete(cacheName)
+                  .then(() => {
+                    log('success', `Đã xóa cache: ${cacheName}`);
+                  });
+              })
+            );
+          })
+          .then(() => {
+            log('success', 'Đã xóa tất cả cache.');
+          })
+          .catch(error => {
+            log('error', 'Lỗi khi xóa cache: ' + error.message);
+          });
+      } else {
+        log('error', 'Trình duyệt không hỗ trợ Cache API');
+      }
+    }
+    
+    // Xóa storage
+    function clearAllStorage() {
+      log('info', 'Đang xóa tất cả storage...');
+      
+      try {
+        localStorage.clear();
+        log('success', 'Đã xóa localStorage');
+      } catch (e) {
+        log('error', 'Lỗi khi xóa localStorage: ' + e.message);
+      }
+      
+      try {
+        sessionStorage.clear();
+        log('success', 'Đã xóa sessionStorage');
+      } catch (e) {
+        log('error', 'Lỗi khi xóa sessionStorage: ' + e.message);
+      }
+      
+      try {
+        document.cookie.split(";").forEach(function(c) {
+          document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
+        });
+        log('success', 'Đã xóa cookies');
+      } catch (e) {
+        log('error', 'Lỗi khi xóa cookies: ' + e.message);
+      }
+      
+      updateEnvironmentInfo();
+    }
+
+    // Thêm log mới
+    function log(type, message) {
+      errorLogs.push({
+        type: type,
+        message: message,
+        timestamp: new Date().toISOString()
+      });
+      
+      updateErrorStats(errorLogs);
+      displayLogs(errorLogs);
+    }
+
+    // Khởi tạo
+    window.addEventListener('load', function() {
+      updateOnlineStatus();
+      updateEnvironmentInfo();
+      displaySystemInfo();
+      checkServiceWorker();
+      checkManifest();
+      
+      updateErrorStats(errorLogs);
+      displayLogs(errorLogs);
+      
+      // Lắng nghe sự kiện cho các nút bấm
+      document.getElementById('clearLogs').addEventListener('click', function() {
+        errorLogs.length = 0;
+        updateErrorStats(errorLogs);
+        displayLogs(errorLogs);
+      });
+      
+      document.getElementById('testFetch').addEventListener('click', testAPI);
+      document.getElementById('checkServiceWorker').addEventListener('click', checkServiceWorker);
+      document.getElementById('clearCache').addEventListener('click', clearAllCaches);
+      document.getElementById('clearStorage').addEventListener('click', clearAllStorage);
+      document.getElementById('backToApp').addEventListener('click', function() {
+        window.location.href = '/';
+      });
+      
+      // Bộ lọc
+      document.getElementById('filterAll').addEventListener('click', function() {
+        displayLogs(errorLogs);
+      });
+      
+      document.getElementById('filterConsole').addEventListener('click', function() {
+        displayLogs(errorLogs, 'console');
+      });
+      
+      document.getElementById('filterJS').addEventListener('click', function() {
+        displayLogs(errorLogs, 'js');
+      });
+      
+      document.getElementById('filterResources').addEventListener('click', function() {
+        displayLogs(errorLogs, 'resource');
+      });
+      
+      document.getElementById('filterFetch').addEventListener('click', function() {
+        displayLogs(errorLogs, 'fetch');
+      });
+    });
+
+    // Theo dõi trạng thái kết nối
+    window.addEventListener('online', updateOnlineStatus);
+    window.addEventListener('offline', updateOnlineStatus);
+    
+    // Cập nhật thời gian hiện tại mỗi phút
+    setInterval(function() {
+      document.getElementById('currentTime').textContent = new Date().toLocaleString();
+    }, 60000);
+  </script>
+</body>
+</html> 

@@ -19,6 +19,15 @@
       ]
     },
     {
+      "source": "/debug.html",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache, no-store, must-revalidate"
+        }
+      ]
+    },
+    {
       "source": "/(.*)\\.(?:js|css|jpg|jpeg|gif|png|ico|svg|woff|woff2|ttf|otf)",
       "headers": [
         {
@@ -41,6 +50,14 @@
         {
           "key": "X-XSS-Protection",
           "value": "1; mode=block"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        },
+        {
+          "key": "Permissions-Policy",
+          "value": "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()"
         }
       ]
     }
@@ -53,6 +70,7 @@
     { "source": "/logo512.png", "destination": "/logo512.png" },
     { "source": "/offline.html", "destination": "/offline.html" },
     { "source": "/404.html", "destination": "/404.html" },
+    { "source": "/debug.html", "destination": "/debug.html" },
     { "source": "/(.*)", "destination": "/index.html" }
   ],
   "routes": [
@@ -68,6 +86,13 @@
       "continue": true
     },
     {
+      "src": "/debug.html",
+      "headers": {
+        "Cache-Control": "no-cache, no-store, must-revalidate"
+      },
+      "continue": true
+    },
+    {
       "src": "/offline.html",
       "headers": {
         "Cache-Control": "no-cache, no-store, must-revalidate"
@@ -78,6 +103,13 @@
       "src": "/404.html",
       "headers": {
         "Cache-Control": "no-cache, no-store, must-revalidate"
+      },
+      "continue": true
+    },
+    {
+      "src": "/static/(.*)",
+      "headers": {
+        "Cache-Control": "public, max-age=31536000, immutable"
       },
       "continue": true
     },

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="vi">
   <head>
     <meta charset="utf-8" />
     <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
@@ -10,84 +10,290 @@
       content="Vehicle Management System"
     />
     <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
-    <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
+    <link rel="manifest" crossorigin="use-credentials" href="%PUBLIC_URL%/manifest.json" />
     <title>Vehicle Management</title>
+    <!-- Xử lý lỗi toàn cục -->
     <script>
-      // 1. Đè lên hàm console.error gốc
+      // Biến toàn cục để lưu trữ các lỗi
+      window._errorsLog = [];
+      
+      // Chặn tất cả lỗi console.error liên quan đến message port và 404
       (function() {
         const originalConsoleError = console.error;
         console.error = function(...args) {
-          // Không log lỗi message port
-          if (
-            args.length > 0 && 
-            typeof args[0] === 'string' && 
-            (args[0].includes('message port closed') || 
-             args[0].includes('Failed to load resource: net::'))
-          ) {
-            console.warn('Đã ngăn chặn lỗi:', args[0].substring(0, 50) + '...');
-            return;
+          // Không log các lỗi đã lọc
+          if (args.length > 0 && typeof args[0] === 'string') {
+            const errorMsg = args[0];
+            
+            // Danh sách các lỗi cần lọc
+            const errorsToFilter = [
+              'message port closed', 
+              'Failed to load resource: net::', 
+              'Network Error',
+              'Failed to fetch',
+              'NetworkError',
+              'ChunkLoadError',
+              'Loading CSS chunk',
+              'Loading chunk',
+              'The connection to'
+            ];
+            
+            // Kiểm tra nếu lỗi nằm trong danh sách cần lọc
+            if (errorsToFilter.some(err => errorMsg.includes(err))) {
+              window._errorsLog.push({
+                type: 'console.error',
+                message: errorMsg,
+                timestamp: new Date().toISOString()
+              });
+              return;
+            }
           }
           originalConsoleError.apply(console, args);
         };
+        
+        // Ghi đè console.warn
+        const originalConsoleWarn = console.warn;
+        console.warn = function(...args) {
+          if (args.length > 0 && typeof args[0] === 'string') {
+            const warnMsg = args[0];
+            if (warnMsg.includes('message port') || warnMsg.includes('net::')) {
+              window._errorsLog.push({
+                type: 'console.warn',
+                message: warnMsg,
+                timestamp: new Date().toISOString()
+              });
+              return;
+            }
+          }
+          originalConsoleWarn.apply(console, args);
+        };
       })();
 
-      // 2. Xử lý lỗi window.onerror
+      // Xử lý tất cả lỗi JS với event listeners
       window.addEventListener('error', function(event) {
-        if (event.message && event.message.includes('message port closed')) {
-          console.warn('Đã ngăn chặn lỗi message port closed');
-          event.preventDefault();
-          event.stopPropagation();
-          return false;
+        // Bắt lỗi JS
+        if (event.message) {
+          if (event.message.includes('message port closed') || 
+              event.message.includes('Failed to load') ||
+              event.message.includes('NetworkError')) {
+            window._errorsLog.push({
+              type: 'js.error',
+              message: event.message,
+              file: event.filename,
+              line: event.lineno,
+              timestamp: new Date().toISOString()
+            });
+            event.preventDefault();
+            return false;
+          }
         }
-      });
-
-      // 3. Xử lý lỗi tài nguyên không tìm thấy
-      window.addEventListener('error', function(event) {
-        if (event.target && (event.target.tagName === 'LINK' || event.target.tagName === 'SCRIPT')) {
-          console.warn('Tài nguyên không tìm thấy:', event.target.src || event.target.href);
+        
+        // Bắt lỗi tài nguyên
+        if (event.target && (
+            event.target.tagName === 'LINK' || 
+            event.target.tagName === 'SCRIPT' || 
+            event.target.tagName === 'IMG'
+          )) {
+          window._errorsLog.push({
+            type: 'resource.error',
+            element: event.target.tagName,
+            source: event.target.src || event.target.href,
+            timestamp: new Date().toISOString()
+          });
           event.preventDefault();
-          event.stopPropagation();
           return false;
         }
       }, true);
 
-      // 4. Xử lý promise rejection
+      // Bắt tất cả promise rejection không xử lý
       window.addEventListener('unhandledrejection', function(event) {
-        if (event.reason && event.reason.message && 
-            (event.reason.message.includes('message port closed') || 
-             event.reason.message.includes('Failed to fetch'))) {
-          console.warn('Đã ngăn chặn promise rejection:', event.reason.message);
+        let message = 'Unknown promise error';
+        if (event.reason) {
+          if (typeof event.reason === 'string') {
+            message = event.reason;
+          } else if (event.reason.message) {
+            message = event.reason.message;
+          } else if (event.reason.stack) {
+            message = event.reason.stack;
+          }
+        }
+        
+        if (message.includes('message port') || 
+            message.includes('Failed to fetch') || 
+            message.includes('NetworkError') ||
+            message.includes('Network Error')) {
+          window._errorsLog.push({
+            type: 'promise.rejection',
+            message: message,
+            timestamp: new Date().toISOString()
+          });
           event.preventDefault();
-          event.stopPropagation();
           return false;
         }
+      });
+
+      // Biến cho biết đã truy cập vào trang trước đó hay chưa
+      try {
+        sessionStorage.setItem('app_visited', 'true');
+      } catch (e) {
+        console.warn('Không thể truy cập sessionStorage');
+      }
+      
+      // Kiểm tra và sửa URL nếu cần
+      function fixHistoryAndUrl() {
+        if (window.location.pathname !== '/' && !window.location.pathname.includes('.')) {
+          if (window.history && window.history.replaceState) {
+            // Tạo URL mới không có hash fragment
+            const newUrl = window.location.origin + window.location.pathname + window.location.search;
+            window.history.replaceState(
+              { path: newUrl }, 
+              document.title, 
+              newUrl
+            );
+            
+            // Log thông tin
+            window._errorsLog.push({
+              type: 'url.fixed',
+              from: window.location.href,
+              to: newUrl,
+              timestamp: new Date().toISOString()
+            });
+          }
+        }
+      }
+      
+      // Thêm tiện ích gỡ lỗi
+      function addDebugTools() {
+        if (window.location.search.includes('debug=true')) {
+          var debugDiv = document.createElement('div');
+          debugDiv.style.position = 'fixed';
+          debugDiv.style.bottom = '10px';
+          debugDiv.style.right = '10px';
+          debugDiv.style.zIndex = '9999';
+          debugDiv.style.background = 'rgba(0,0,0,0.7)';
+          debugDiv.style.color = 'white';
+          debugDiv.style.padding = '5px 10px';
+          debugDiv.style.borderRadius = '4px';
+          debugDiv.style.fontSize = '12px';
+          debugDiv.style.cursor = 'pointer';
+          debugDiv.textContent = 'Debug';
+          debugDiv.addEventListener('click', function() {
+            window.location.href = '/debug.html?errors=' + encodeURIComponent(JSON.stringify(window._errorsLog));
+          });
+          document.body.appendChild(debugDiv);
+        }
+      }
+      
+      // Chạy khi DOM đã tải
+      document.addEventListener('DOMContentLoaded', function() {
+        fixHistoryAndUrl();
+        addDebugTools();
       });
     </script>
   </head>
   <body>
-    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <noscript>Bạn cần bật JavaScript để chạy ứng dụng này.</noscript>
     <div id="root"></div>
     <script>
-      // Đăng ký service worker
+      // Đăng ký service worker - xử lý triệt để lỗi
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', function() {
-          navigator.serviceWorker.register('/service-worker.js', { scope: '/' })
-            .then(function(registration) {
-              console.log('ServiceWorker đăng ký thành công: ', registration.scope);
-            })
-            .catch(function(error) {
-              console.log('Lỗi đăng ký ServiceWorker: ', error);
+          navigator.serviceWorker.register('/service-worker.js', { 
+            scope: '/',
+            updateViaCache: 'none'
+          })
+          .then(function(registration) {
+            console.log('ServiceWorker đăng ký thành công:', registration.scope);
+            
+            // Cập nhật service worker nếu có phiên bản mới
+            registration.addEventListener('updatefound', function() {
+              console.log('Đang cài đặt ServiceWorker mới...');
+              const newWorker = registration.installing;
+              
+              newWorker.addEventListener('statechange', function() {
+                console.log('ServiceWorker trạng thái mới:', newWorker.state);
+              });
             });
+            
+            // Kiểm tra update
+            setInterval(function() {
+              registration.update()
+                .catch(function() {
+                  // Bỏ qua lỗi khi cập nhật
+                });
+            }, 60 * 60 * 1000); // Kiểm tra mỗi giờ
+          })
+          .catch(function(error) {
+            // Chỉ log lỗi, không dừng ứng dụng
+            console.log('Lỗi đăng ký ServiceWorker:', error);
+          });
+          
+          // Xử lý khi controller thay đổi (service worker mới)
+          navigator.serviceWorker.addEventListener('controllerchange', function() {
+            console.log('ServiceWorker mới đang điều khiển trang');
+          });
+          
+          // Xử lý message từ service worker
+          navigator.serviceWorker.addEventListener('message', function(event) {
+            console.log('Nhận message từ ServiceWorker:', event.data);
+          });
         });
       }
-
-      // Fix 404 error khi load lại trang
-      if (window.location.pathname !== '/' && !window.location.pathname.includes('.')) {
-        if (window.history && window.history.replaceState) {
-          const url = window.location.origin + window.location.pathname + window.location.search;
-          window.history.replaceState(null, document.title, url);
-        }
+      
+      // Fix bug khi load lại trang trên mobile (đặc biệt là iOS)
+      if ('scrollRestoration' in history) {
+        history.scrollRestoration = 'manual';
       }
+      
+      // Xử lý lỗi Fetch API - nếu fetch bị lỗi, thử lại với XMLHttpRequest
+      const originalFetch = window.fetch;
+      window.fetch = function() {
+        return originalFetch.apply(this, arguments)
+          .catch(function(err) {
+            if (err && (
+                err.message.includes('Failed to fetch') || 
+                err.message.includes('NetworkError') ||
+                err.message.includes('Network Error')
+              )) {
+              const url = arguments[0];
+              const options = arguments[1] || {};
+              
+              // Log lỗi
+              window._errorsLog.push({
+                type: 'fetch.error',
+                url: typeof url === 'string' ? url : url.url,
+                message: err.message,
+                timestamp: new Date().toISOString()
+              });
+              
+              // Không thử lại với các method không phải GET
+              if (options.method && options.method !== 'GET') {
+                throw err;
+              }
+              
+              // Thử lại với XHR cho các request GET
+              return new Promise(function(resolve, reject) {
+                var xhr = new XMLHttpRequest();
+                xhr.open('GET', typeof url === 'string' ? url : url.url);
+                xhr.onload = function() {
+                  if (xhr.status >= 200 && xhr.status < 300) {
+                    resolve(new Response(xhr.response, {
+                      status: xhr.status,
+                      statusText: xhr.statusText
+                    }));
+                  } else {
+                    reject(new Error('XHR failed: ' + xhr.statusText));
+                  }
+                };
+                xhr.onerror = function() {
+                  reject(new Error('XHR network error'));
+                };
+                xhr.send();
+              });
+            }
+            throw err;
+          });
+      };
     </script>
     <!--
       This HTML file is a template.
