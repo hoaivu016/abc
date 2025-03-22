@@ -21,8 +21,45 @@ export const getCurrentSession = async () => {
  * @returns true nếu đã đăng nhập, false nếu chưa
  */
 export const isAuthenticated = async () => {
-  const session = await getCurrentSession();
-  return !!session;
+  try {
+    const session = await getCurrentSession();
+    return !!session;
+  } catch (error) {
+    logError(error, { source: 'isAuthenticated' });
+    return false;
+  }
+};
+
+/**
+ * Kiểm tra xem người dùng đã đăng nhập hay chưa (phiên bản đồng bộ sử dụng localStorage)
+ * @returns true nếu có token đăng nhập trong localStorage, false nếu không
+ */
+export const isAuthenticatedSync = () => {
+  try {
+    const token = localStorage.getItem('supabase.auth.token');
+    return !!token;
+  } catch (error) {
+    return false;
+  }
+};
+
+/**
+ * Chuyển hướng người dùng đến trang đăng nhập
+ */
+export const redirectToLogin = () => {
+  if (typeof window !== 'undefined') {
+    const currentPath = window.location.pathname;
+    window.location.href = `/login?redirect=${encodeURIComponent(currentPath)}`;
+  }
+};
+
+/**
+ * Chuyển hướng người dùng đến trang danh sách xe
+ */
+export const redirectToVehicleList = () => {
+  if (typeof window !== 'undefined') {
+    window.location.href = '/';
+  }
 };
 
 /**
@@ -56,9 +93,7 @@ export const handleAuthError = async (error: any) => {
       await supabase.auth.signOut();
       
       // Redirect về trang login nếu đang ở client-side
-      if (typeof window !== 'undefined') {
-        window.location.href = '/login';
-      }
+      redirectToLogin();
       
       return true;
     } catch (refreshError) {

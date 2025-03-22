@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Box, 
   Container, 
@@ -14,7 +14,7 @@ import {
 import { Visibility, VisibilityOff } from '@mui/icons-material';
 import supabase from '../lib/database/supabase';
 import { getCurrentSession, handleAuthError } from '../lib/auth/auth';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useDispatch } from 'react-redux';
 import { login } from '../store/slices/authSlice';
 
@@ -25,7 +25,24 @@ const Login: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
+  const location = useLocation();
   const dispatch = useDispatch();
+
+  // Lấy redirect path từ query string
+  const searchParams = new URLSearchParams(location.search);
+  const redirectPath = searchParams.get('redirect') || '/';
+
+  // Kiểm tra trạng thái đăng nhập khi component được tải
+  useEffect(() => {
+    const checkAuth = async () => {
+      const session = await getCurrentSession();
+      if (session) {
+        navigate(redirectPath, { replace: true });
+      }
+    };
+    
+    checkAuth();
+  }, [navigate, redirectPath]);
 
   const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -83,8 +100,8 @@ const Login: React.FC = () => {
       // 5. Lưu token vào localStorage
       localStorage.setItem('supabase.auth.token', data.session.access_token);
       
-      // 6. Chuyển hướng đến trang chính
-      navigate('/');
+      // 6. Chuyển hướng đến trang đã yêu cầu hoặc trang danh sách xe
+      navigate(redirectPath, { replace: true });
       
     } catch (err) {
       console.error('Lỗi đăng nhập:', err);

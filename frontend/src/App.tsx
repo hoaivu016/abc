@@ -24,13 +24,14 @@ import {
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { useSelector } from 'react-redux';
+import { useSelector, useDispatch } from 'react-redux';
 import VehicleList from './modules/vehicles/components/VehicleList';
 import VehicleForm from './modules/vehicles/components/VehicleForm';
 import StatusChangeModal from './modules/vehicles/components/StatusChangeModal';
 import Report from './modules/reports/components/Report';
 import Admin from './modules/admin/components/Admin';
 import Login from './pages/Login';
+import FunctionalErrorBoundary from './components/FunctionalErrorBoundary';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import DirectionsCarIcon from '@mui/icons-material/DirectionsCar';
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
@@ -76,7 +77,6 @@ import { checkSupabaseConnection } from './lib/database/supabase';
 import AccountManagement from './modules/accounts/components/AccountManagement';
 import { getCurrentSession } from './lib/auth/auth';
 import { logout } from './redux/actions/authActions';
-import { useDispatch } from 'react-redux';
 
 // Định nghĩa interface cho các tab
 interface TabPanelProps {
@@ -163,12 +163,71 @@ interface ProtectedRouteProps {
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
   const isAuthenticated = useSelector((state: any) => state.auth.isAuthenticated);
   const location = useLocation();
+  const dispatch = useDispatch();
+  const [checkingAuth, setCheckingAuth] = useState(true);
 
-  if (!isAuthenticated) {
-    return <Navigate to="/login" state={{ from: location }} replace />;
+  useEffect(() => {
+    const checkAuthentication = async () => {
+      try {
+        // Kiểm tra xem người dùng đã đăng nhập hay chưa
+        const session = await getCurrentSession();
+        
+        if (!session && !isAuthenticated) {
+          // Nếu không có session và chưa đăng nhập trong Redux, chuyển hướng đến trang đăng nhập
+          console.log('Không tìm thấy phiên đăng nhập, chuyển hướng đến trang đăng nhập');
+        }
+        
+        setCheckingAuth(false);
+      } catch (error) {
+        console.error('Lỗi khi kiểm tra xác thực:', error);
+        setCheckingAuth(false);
+      }
+    };
+
+    checkAuthentication();
+  }, [isAuthenticated, dispatch]);
+
+  if (checkingAuth) {
+    // Hiển thị loading hoặc placeholder khi đang kiểm tra đăng nhập
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+        <CircularProgress />
+      </Box>
+    );
   }
 
+  if (!isAuthenticated) {
+    // Nếu chưa đăng nhập, chuyển hướng đến trang đăng nhập và lưu đường dẫn hiện tại
+    return <Navigate to={`/login?redirect=${encodeURIComponent(location.pathname)}`} replace />;
+  }
+
+  // Nếu đã đăng nhập, hiển thị component con
   return children;
+};
+
+// Bảo vệ trang đăng nhập (nếu đã đăng nhập sẽ chuyển hướng đến trang danh sách xe)
+interface LoginRouteProps {
+  children: ReactElement;
+}
+
+const LoginRoute: React.FC<LoginRouteProps> = ({ children }) => {
+  const isAuthenticated = useSelector((state: any) => state.auth.isAuthenticated);
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  // Lấy đường dẫn redirect từ query params (nếu có)
+  const searchParams = new URLSearchParams(location.search);
+  const redirectPath = searchParams.get('redirect') || '/';
+
+  useEffect(() => {
+    // Nếu đã đăng nhập, chuyển hướng đến trang được yêu cầu hoặc trang chủ
+    if (isAuthenticated) {
+      navigate(redirectPath, { replace: true });
+    }
+  }, [isAuthenticated, navigate, redirectPath]);
+
+  // Nếu chưa đăng nhập, hiển thị trang đăng nhập
+  return !isAuthenticated ? children : null;
 };
 
 function App() {
@@ -2036,7 +2095,11 @@ function App() {
 
   return (
     <Routes>
-      <Route path="/login" element={<Login />} />
+      <Route path="/login" element={
+        <LoginRoute>
+          <Login />
+        </LoginRoute>
+      } />
       <Route path="/" element={
         <ProtectedRoute>
           <MainApp />
@@ -2047,7 +2110,11 @@ function App() {
           <AccountManagement />
         </ProtectedRoute>
       } />
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route path="*" element={
+        <FunctionalErrorBoundary>
+          <Navigate to="/" replace />
+        </FunctionalErrorBoundary>
+      } />
     </Routes>
   );
 }
