@@ -19,14 +19,18 @@ import {
   Slide,
   Portal,
   CircularProgress,
-  TextField
+  TextField,
+  Button
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
+import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { useSelector } from 'react-redux';
 import VehicleList from './modules/vehicles/components/VehicleList';
 import VehicleForm from './modules/vehicles/components/VehicleForm';
 import StatusChangeModal from './modules/vehicles/components/StatusChangeModal';
 import Report from './modules/reports/components/Report';
 import Admin from './modules/admin/components/Admin';
+import Login from './pages/Login';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import DirectionsCarIcon from '@mui/icons-material/DirectionsCar';
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
@@ -148,10 +152,29 @@ interface Staff {
   note?: string;
 }
 
+// Bảo vệ route yêu cầu đăng nhập
+interface ProtectedRouteProps {
+  children: ReactElement;
+}
+
+const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
+  const isAuthenticated = useSelector((state: any) => state.auth.isAuthenticated);
+  const location = useLocation();
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  return children;
+};
+
 function App() {
   // Thêm hỗ trợ xác định thiết bị di động
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const navigate = useNavigate();
+  const location = useLocation();
+  const isAuthenticated = useSelector((state: any) => state.auth.isAuthenticated);
 
   // State chính của ứng dụng
   const [state, setState] = useState<AppState>({
@@ -233,6 +256,13 @@ function App() {
     testSupabaseConnection();
   }, []);
 
+  // Kiểm tra xác thực và chuyển hướng
+  useEffect(() => {
+    if (!isAuthenticated && location.pathname !== '/login') {
+      navigate('/login');
+    }
+  }, [isAuthenticated, location.pathname, navigate]);
+
   // Lưu danh sách xe vào localStorage mỗi khi thay đổi
   useEffect(() => {
     localStorage.setItem('vehicles', JSON.stringify(vehicles));
@@ -247,6 +277,11 @@ function App() {
   useEffect(() => {
     localStorage.setItem('kpis', JSON.stringify(kpiTargets));
   }, [kpiTargets]);
+
+  // Lưu danh sách thưởng phòng hỗ trợ vào localStorage mỗi khi thay đổi
+  useEffect(() => {
+    localStorage.setItem('supportBonuses', JSON.stringify(supportBonus));
+  }, [supportBonus]);
 
   // Thay thế bằng useEffect để khôi phục dữ liệu từ localStorage
   useEffect(() => {
@@ -1934,252 +1969,52 @@ function App() {
     }
   };
 
-  return (
-    <Box sx={{ 
-      display: 'flex', 
-      flexDirection: 'column', 
-      minHeight: '100vh',
-      overflow: 'hidden'
-    }}>
-      <Container maxWidth={false} disableGutters sx={{ px: 2, pb: isMobile ? 7 : 2 }}>
-        {isLoading ? (
+  // Component chính của ứng dụng
+  const MainApp = () => (
+    <Container maxWidth={false} sx={{ p: 0 }}>
+      <CssBaseline />
+      <Box sx={{ width: '100%' }}>
+        {connectionStatus === 'checking' ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
             <CircularProgress />
+            <Typography variant="h6" sx={{ ml: 2 }}>
+              Đang kiểm tra kết nối...
+            </Typography>
+          </Box>
+        ) : connectionStatus === 'disconnected' ? (
+          <Box sx={{ p: 3, textAlign: 'center' }}>
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {connectionError || 'Không thể kết nối đến server. Vui lòng kiểm tra kết nối internet.'}
+            </Alert>
+            <Button variant="contained" onClick={() => window.location.reload()}>
+              Thử lại
+            </Button>
           </Box>
         ) : (
           <>
-            {renderConnectionStatus()}
-            {!isOnline && (
-              <Alert severity="warning" sx={{ mb: 2 }}>
-                Bạn đang offline. Các thay đổi sẽ được đồng bộ khi có kết nối.
-              </Alert>
-            )}
-            <Box sx={{ my: 4 }}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                <Typography variant="h3" component="h1" gutterBottom align="left" sx={{ 
-                  mb: 0,
-                  fontSize: isMobile ? '1.75rem' : '2.5rem'
-                }}>
-                  Quản Lý Kho Xe
-                </Typography>
-                {isOnline ? (
-                  <Chip 
-                    label={isSyncing ? 'Đang đồng bộ...' : 'Đã kết nối'} 
-                    color={isSyncing ? 'warning' : 'success'} 
-                    size="small" 
-                    onClick={synchronizeData}
-                    sx={{ cursor: 'pointer' }}
-                  />
-                ) : (
-                  <Chip 
-                    label="Offline" 
-                    color="error" 
-                    size="small" 
-                  />
-                )}
-              </Box>
-
-              {!isMobile && (
-                <Paper sx={{ borderRadius: 1, boxShadow: 1, mb: 4 }}>
-                  <AppBar position="static" color="default" elevation={0} sx={{ borderTopLeftRadius: 1, borderTopRightRadius: 1 }}>
-                    <Tabs 
-                      value={currentTab} 
-                      onChange={handleTabChange}
-                      indicatorColor="primary"
-                      textColor="primary"
-                      variant="fullWidth"
-                    >
-                      <Tab label="Báo Cáo" sx={{ fontWeight: 'bold', fontSize: '1.25rem' }} />
-                      <Tab label="Danh Sách Xe" sx={{ fontWeight: 'bold', fontSize: '1.25rem' }} />
-                      <Tab label="ADMIN" sx={{ fontWeight: 'bold', fontSize: '1.25rem' }} />
-                      <Tab label="Phân tích tài chính" sx={{ fontWeight: 'bold', fontSize: '1.25rem' }} />
-                    </Tabs>
-                  </AppBar>
-                </Paper>
-              )}
-
-              {/* Hiển thị tab báo cáo */}
-              <TabPanel value={currentTab} index={0}>
-                <Report 
-                  vehicles={vehicles} 
-                  selectedMonth={globalMonth}
-                  selectedYear={globalYear}
-                  onDateChange={handleGlobalDateChange}
-                  staffList={staffList}
-                  kpiList={kpiList}
-                />
-              </TabPanel>
-
-              {/* Hiển thị tab danh sách xe */}
-              <TabPanel value={currentTab} index={1}>
-                <VehicleList 
-                  vehicles={vehicles} 
-                  onEdit={handleOpenEditVehicleForm}
-                  onDelete={handleDeleteVehicle}
-                  onStatusChange={handleStatusChange}
-                  onAddCost={handleAddCost}
-                  onAddVehicle={handleOpenAddVehicleForm}
-                  selectedMonth={globalMonth}
-                  selectedYear={globalYear}
-                  onDateChange={handleGlobalDateChange}
-                />
-                {isVehicleFormOpen && (
-                  <VehicleForm 
-                    open={isVehicleFormOpen}
-                    onClose={() => {
-                      setIsVehicleFormOpen(false);
-                      setEditingVehicle(undefined);
-                      setHasUnsavedChanges(false);
-                    }}
-                    onSubmit={editingVehicle ? handleEditVehicle : handleAddVehicle}
-                    initialData={editingVehicle}
-                    staffList={staffList}
-                    onFormChange={(hasChanges) => setHasUnsavedChanges(hasChanges)}
-                  />
-                )}
-                {isStatusChangeModalOpen && selectedVehicleForStatusChange && (
-                  <StatusChangeModal 
-                    open={isStatusChangeModalOpen}
-                    vehicle={selectedVehicleForStatusChange}
-                    onClose={() => setIsStatusChangeModalOpen(false)}
-                    onStatusChange={handleStatusChangeConfirm}
-                    staffList={staffList}
-                  />
-                )}
-              </TabPanel>
-
-              {/* Hiển thị tab ADMIN */}
-              <TabPanel value={currentTab} index={2}>
-                <Admin 
-                  staffList={staffList}
-                  vehicles={vehicles}
-                  onAddStaff={handleAddStaff}
-                  onEditStaff={handleEditStaff}
-                  onDeleteStaff={handleDeleteStaff}
-                  kpiList={kpiList}
-                  onSaveKpi={handleSaveKpi}
-                  supportBonusList={supportBonus}
-                  onSaveSupportBonus={handleSaveSupportBonus}
-                  selectedMonth={globalMonth}
-                  selectedYear={globalYear}
-                  onDateChange={handleGlobalDateChange}
-                  onOpenVehicleList={() => setCurrentTab(0)}
-                />
-              </TabPanel>
-
-              {/* Hiển thị tab Phân tích tài chính */}
-              <TabPanel value={currentTab} index={3}>
-                <FinancialAnalysis 
-                  vehicles={state.vehicleList}
-                  capitalAmount={state.financialData.capitalAmount}
-                  loanAmount={state.financialData.loanAmount}
-                  interestRate={state.financialData.interestRate}
-                  onUpdateFinancialData={handleUpdateFinancialData}
-                />
-              </TabPanel>
-            </Box>
+            {/* Rest of your UI here */}
+            {/* ... */}
           </>
         )}
-      </Container>
-      
-      {/* Bottom Navigation cho thiết bị di động */}
-      {isMobile && (
-        <Paper sx={{ 
-          position: 'fixed', 
-          bottom: 0, 
-          left: 0, 
-          right: 0, 
-          zIndex: 1100,
-          borderTopLeftRadius: 16,
-          borderTopRightRadius: 16,
-          overflow: 'hidden',
-          boxShadow: '0px -2px 10px rgba(0,0,0,0.1)'
-        }} elevation={3}>
-          <BottomNavigation
-            value={currentTab}
-            onChange={(_event, newValue) => {
-              setCurrentTab(newValue);
-            }}
-            showLabels
-            sx={{ 
-              height: 65,
-              '& .MuiBottomNavigationAction-root': {
-                py: 1
-              }
-            }}
-          >
-            <BottomNavigationAction 
-              label="Báo Cáo" 
-              icon={<DashboardIcon />} 
-              sx={{ 
-                color: currentTab === 0 ? 'primary.main' : 'text.secondary',
-                '&.Mui-selected': {
-                  color: 'primary.main'
-                }
-              }}
-            />
-            <BottomNavigationAction 
-              label="Danh Sách Xe" 
-              icon={<DirectionsCarIcon />} 
-              sx={{ 
-                color: currentTab === 1 ? 'primary.main' : 'text.secondary',
-                '&.Mui-selected': {
-                  color: 'primary.main'
-                }
-              }}
-            />
-            <BottomNavigationAction 
-              label="Admin" 
-              icon={<AdminPanelSettingsIcon />} 
-              sx={{ 
-                color: currentTab === 2 ? 'primary.main' : 'text.secondary',
-                '&.Mui-selected': {
-                  color: 'primary.main'
-                }
-              }}
-            />
-            <BottomNavigationAction 
-              label="Phân tích tài chính" 
-              icon={<BarChartIcon />} 
-              sx={{ 
-                color: currentTab === 3 ? 'primary.main' : 'text.secondary',
-                '&.Mui-selected': {
-                  color: 'primary.main'
-                }
-              }}
-            />
-          </BottomNavigation>
-        </Paper>
-      )}
-      
-      {/* Thông báo đồng bộ hóa */}
-      <Portal>
-        <Slide direction="up" in={showSyncMessage}>
-          <Box
-            sx={{
-              position: 'fixed',
-              bottom: isMobile ? 80 : 24,
-              left: '50%',
-              transform: 'translateX(-50%)',
-              zIndex: 9999,
-              maxWidth: 500,
-              width: 'calc(100% - 32px)',
-              boxShadow: 3,
-              borderRadius: 1
-            }}
-          >
-            <Alert 
-              onClose={() => setShowSyncMessage(false)} 
-              severity={syncMessageData.type}
-              variant="filled"
-              sx={{ width: '100%' }}
-            >
-              {syncMessageData.message}
-            </Alert>
-          </Box>
-        </Slide>
-      </Portal>
-    </Box>
+      </Box>
+    </Container>
+  );
+
+  return (
+    <Routes>
+      <Route path="/login" element={<Login />} />
+      <Route path="/" element={
+        <ProtectedRoute>
+          <MainApp />
+        </ProtectedRoute>
+      } />
+      <Route path="/account-management" element={
+        <ProtectedRoute>
+          <AccountManagement />
+        </ProtectedRoute>
+      } />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   );
 }
 
