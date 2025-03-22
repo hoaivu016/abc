@@ -1,225 +1,224 @@
 import { createClient } from '@supabase/supabase-js';
-import { ENV, validateEnvironment } from '../../utils/environment';
-import { logError, withErrorHandling } from '../../utils/errorHandler';
+import type { Database } from '../../types/supabase';
+import { ENV } from '../../utils/environment';
+import { logError } from '../../utils/errorHandler';
 
 // Kiểm tra các biến môi trường bắt buộc
-validateEnvironment();
+if (!ENV.SUPABASE_URL || !ENV.SUPABASE_ANON_KEY) {
+  throw new Error('Thiếu biến môi trường SUPABASE_URL hoặc SUPABASE_ANON_KEY');
+}
 
-// Tạo client Supabase với cấu hình nâng cao
-export const supabase = createClient(ENV.SUPABASE_URL, ENV.SUPABASE_ANON_KEY, {
-  auth: {
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: true,
-    storage: window.localStorage,
-    storageKey: 'supabase.auth.token',
-    flowType: 'implicit'
-  },
-  global: {
-    headers: {
-      'Accept': 'application/json',
-      'Content-Type': 'application/json',
-    },
-  },
-});
+// Singleton instance của Supabase client
+let supabaseInstance: ReturnType<typeof createClient<Database>> | null = null;
 
-// Theo dõi lỗi trong Supabase client
-supabase.auth.onAuthStateChange((event, session) => {
-  if (event === 'SIGNED_OUT' || event === 'USER_DELETED') {
-    // Xóa dữ liệu khi đăng xuất
-    localStorage.removeItem('supabase.auth.token');
-  } else if (event === 'SIGNED_IN') {
-    console.log('Đăng nhập thành công:', session?.user?.email);
-  } else if (event === 'TOKEN_REFRESHED') {
-    console.log('Token đã được làm mới');
-  }
-});
+// Hàm khởi tạo Supabase client với retry mechanism
+const initSupabase = (retryCount = 0): ReturnType<typeof createClient<Database>> => {
+  if (supabaseInstance) return supabaseInstance;
 
-// Hàm đăng nhập với tài khoản mặc định
-export const signInWithDefaultAccount = withErrorHandling(async () => {
   try {
-    // Xóa session cũ nếu có
-    await supabase.auth.signOut();
-    
-    console.log('Đang thử đăng nhập với:', ENV.DEFAULT_EMAIL);
-    
-    // Thực hiện đăng nhập với tài khoản mặc định
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email: ENV.DEFAULT_EMAIL,
-      password: ENV.DEFAULT_PASSWORD
+    supabaseInstance = createClient<Database>(ENV.SUPABASE_URL, ENV.SUPABASE_ANON_KEY, {
+      auth: {
+        autoRefreshToken: true,
+        persistSession: true,
+        detectSessionInUrl: true,
+        storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+        storageKey: 'supabase.auth.token',
+        flowType: 'pkce'
+      },
+      global: {
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+        },
+      },
     });
-    
-    if (error) {
-      console.error('Lỗi đăng nhập:', error);
-      if (error.message === 'Invalid login credentials') {
-        console.error('Thông tin đăng nhập không hợp lệ. Vui lòng kiểm tra email và mật khẩu trong biến môi trường.');
-        console.error('REACT_APP_DEFAULT_EMAIL:', ENV.DEFAULT_EMAIL);
-        // Không log mật khẩu vì lý do bảo mật
+
+    // Theo dõi trạng thái xác thực
+    supabaseInstance.auth.onAuthStateChange(async (event, session) => {
+      console.log('Auth state changed:', event);
+      
+      if (event === 'SIGNED_OUT' || event === 'USER_DELETED') {
+        localStorage.removeItem('supabase.auth.token');
+        supabaseInstance = null; // Reset instance để tạo mới khi cần
+      } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        if (session?.access_token) {
+          localStorage.setItem('supabase.auth.token', session.access_token);
+        }
       }
-      throw error;
-    }
-
-    if (!data?.session) {
-      throw new Error('Không nhận được phiên sau khi đăng nhập');
-    }
-
-    console.log('Đăng nhập thành công:', data.user?.email);
-    return data.session;
-  } catch (error) {
-    // Thêm thông tin context cho lỗi
-    logError(error, { 
-      action: 'signInWithDefaultAccount',
-      email: ENV.DEFAULT_EMAIL,
-      supabaseUrl: ENV.SUPABASE_URL
     });
+
+    return supabaseInstance;
+  } catch (error) {
+    if (retryCount < 3) {
+      console.warn(`Lỗi khởi tạo Supabase (lần ${retryCount + 1}):`, error);
+      return initSupabase(retryCount + 1);
+    }
     throw error;
   }
-});
+};
 
-// Kiểm tra và khôi phục phiên
-export const checkAndRestoreSession = withErrorHandling(async () => {
-  const { data: { session } } = await supabase.auth.getSession();
-  return session;
-});
+// Export supabase instance
+export const supabase = initSupabase();
 
-// Kiểm tra kết nối Supabase
-export const checkSupabaseConnection = withErrorHandling(async () => {
-  // Kiểm tra và khôi phục phiên hiện tại
-  let session = await checkAndRestoreSession();
-  
-  // Nếu chưa có phiên, thử đăng nhập với tài khoản mặc định
-  if (!session) {
-    try {
-      session = await signInWithDefaultAccount();
-      if (!session) {
-        console.error('Không thể đăng nhập');
-        return false;
-      }
-    } catch (error) {
-      logError(error, { action: 'checkSupabaseConnection - signInWithDefaultAccount' });
-      return false;
-    }
-  }
-  
+// Hàm kiểm tra và làm mới token
+export const refreshToken = async (): Promise<boolean> => {
   try {
-    // Thực hiện truy vấn đơn giản để kiểm tra kết nối
-    const { error } = await supabase.from('users').select('id').limit(1);
-    
-    if (error && error.code !== 'PGRST116') { // Bỏ qua lỗi không có dữ liệu
-      logError(error, { action: 'checkSupabaseConnection - testQuery' });
-      return false;
-    }
-    
-    return true;
+    const { data: { session }, error } = await supabase.auth.refreshSession();
+    if (error) throw error;
+    return !!session;
   } catch (error) {
-    logError(error, { action: 'checkSupabaseConnection' });
+    console.error('Lỗi khi làm mới token:', error);
     return false;
   }
-});
+};
 
-// Làm mới token
-export const refreshSupabaseToken = withErrorHandling(async () => {
-  const { data: { session } } = await supabase.auth.refreshSession();
-  return session;
-});
-
-// Hàm kiểm tra và xử lý lỗi xác thực
-export const handleAuthError = withErrorHandling(async (error: any) => {
-  if (error.code === '42501' || error.status === 401) {
-    try {
-      // Thử đăng nhập lại với tài khoản mặc định
-      await signInWithDefaultAccount();
-      return true;
-    } catch (authError) {
-      logError(authError, { action: 'handleAuthError - reauth' });
-      return false;
-    }
-  }
-  return false;
-});
-
-// Hàm truy vấn an toàn cho các bảng
-export const safeQuery = withErrorHandling(async (tableName: string, options: any = {}, retryCount = 0) => {
-  // Đảm bảo xác thực
-  let session = await checkAndRestoreSession();
-  
-  if (!session) {
-    try {
-      session = await signInWithDefaultAccount();
-      if (!session) {
-        throw new Error('Không thể xác thực để truy vấn dữ liệu');
-      }
-    } catch (error) {
-      logError(error, { action: 'safeQuery - auth', tableName });
-      throw error;
-    }
-  }
-
-  // Truy vấn với các tùy chọn mặc định
-  const defaultOptions = {
-    select: '*',
-    order: 'created_at.desc',
-    ...options
-  };
-
-  // Xây dựng query
-  let query = supabase
-    .from(tableName)
-    .select(defaultOptions.select);
-
-  // Thêm order nếu có
-  if (defaultOptions.order) {
-    query = query.order(defaultOptions.order);
-  }
-
-  // Áp dụng các bộ lọc bổ sung nếu có
-  if (defaultOptions.filter) {
-    Object.keys(defaultOptions.filter).forEach(key => {
-      query = query.filter(key, 'eq', defaultOptions.filter[key]);
-    });
-  }
-
+// Hàm kiểm tra session hiện tại
+export const getCurrentSession = async () => {
   try {
-    // Thực hiện query
-    const { data, error } = await query;
+    const { data: { session }, error } = await supabase.auth.getSession();
+    if (error) throw error;
+    return session;
+  } catch (error) {
+    console.error('Lỗi khi lấy session:', error);
+    return null;
+  }
+};
 
-    if (error) {
-      // Xử lý các loại lỗi cụ thể
-      if (error.code === '42501' || error.status === 401) {
-        // Lỗi xác thực - thử đăng nhập lại
-        if (retryCount < 2) {
-          await signInWithDefaultAccount();
-          return safeQuery(tableName, options, retryCount + 1);
+// Hàm đăng nhập với retry mechanism
+export const signInWithRetry = async (email: string, password: string, maxRetries = 3) => {
+  let retryCount = 0;
+  
+  const attemptSignIn = async (): Promise<any> => {
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
+
+      if (error) {
+        if (retryCount < maxRetries && 
+            (error.message.includes('network') || error.message.includes('timeout'))) {
+          retryCount++;
+          console.warn(`Đang thử đăng nhập lại (lần ${retryCount})...`);
+          await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
+          return attemptSignIn();
         }
-        throw new Error(`Lỗi xác thực sau ${retryCount + 1} lần thử: ${error.message}`);
-      } else if (error.code === '42P01') {
-        // Bảng không tồn tại
-        throw new Error(`Bảng ${tableName} không tồn tại`);
-      } else if (error.code === '500') {
-        // Lỗi server - thử lại sau
-        if (retryCount < 2) {
-          await new Promise(resolve => setTimeout(resolve, 1000)); // Đợi 1 giây
-          return safeQuery(tableName, options, retryCount + 1);
-        }
-        throw new Error(`Lỗi server sau ${retryCount + 1} lần thử: ${error.message}`);
-      } else if (error.code === '23505') {
-        // Lỗi unique constraint violation
-        throw new Error(`Lỗi ràng buộc unique cho bảng ${tableName}: ${error.message}`);
-      } else {
-        // Lỗi khác
         throw error;
       }
-    }
 
-    return data || [];
-  } catch (error) {
-    // Log lỗi với context đầy đủ
-    logError(error, {
-      action: 'safeQuery',
-      tableName,
-      options,
-      retryCount
-    });
-    throw error;
-  }
-}); 
+      return data;
+    } catch (error) {
+      logError(error, { action: 'signInWithRetry', email, retryCount });
+      throw error;
+    }
+  };
+
+  return attemptSignIn();
+};
+
+// Hàm kiểm tra kết nối với retry mechanism
+export const checkSupabaseConnection = async (maxRetries = 3): Promise<boolean> => {
+  let retryCount = 0;
+
+  const attemptConnection = async (): Promise<boolean> => {
+    try {
+      // Kiểm tra session hiện tại
+      const session = await getCurrentSession();
+      
+      if (!session) {
+        // Thử đăng nhập với tài khoản mặc định nếu có
+        if (ENV.DEFAULT_EMAIL && ENV.DEFAULT_PASSWORD) {
+          await signInWithRetry(ENV.DEFAULT_EMAIL, ENV.DEFAULT_PASSWORD);
+        }
+      }
+
+      // Thực hiện truy vấn đơn giản để kiểm tra kết nối
+      const { error } = await supabase.from('users').select('id').limit(1);
+      
+      if (error) {
+        // Nếu lỗi là do xác thực, thử làm mới token
+        if (error.status === 401 || error.code === '42501') {
+          const refreshed = await refreshToken();
+          if (refreshed) return true;
+        }
+        
+        if (retryCount < maxRetries) {
+          retryCount++;
+          console.warn(`Đang thử kết nối lại (lần ${retryCount})...`);
+          await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
+          return attemptConnection();
+        }
+        throw error;
+      }
+
+      return true;
+    } catch (error) {
+      if (retryCount < maxRetries) {
+        retryCount++;
+        console.warn(`Đang thử kết nối lại (lần ${retryCount})...`);
+        await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
+        return attemptConnection();
+      }
+      logError(error, { action: 'checkSupabaseConnection', retryCount });
+      return false;
+    }
+  };
+
+  return attemptConnection();
+};
+
+// Hàm truy vấn an toàn với retry mechanism
+export const safeQuery = async (tableName: string, options: any = {}, maxRetries = 3) => {
+  let retryCount = 0;
+
+  const attemptQuery = async () => {
+    try {
+      // Đảm bảo có session hợp lệ
+      const session = await getCurrentSession();
+      if (!session) {
+        const refreshed = await refreshToken();
+        if (!refreshed && ENV.DEFAULT_EMAIL && ENV.DEFAULT_PASSWORD) {
+          await signInWithRetry(ENV.DEFAULT_EMAIL, ENV.DEFAULT_PASSWORD);
+        }
+      }
+
+      // Thực hiện truy vấn
+      const { data, error } = await supabase
+        .from(tableName)
+        .select(options.select || '*')
+        .order(options.orderBy || 'created_at', { ascending: false });
+
+      if (error) {
+        // Xử lý các loại lỗi cụ thể
+        if (error.status === 401 || error.code === '42501') {
+          const refreshed = await refreshToken();
+          if (refreshed && retryCount < maxRetries) {
+            retryCount++;
+            return attemptQuery();
+          }
+        }
+        
+        if (retryCount < maxRetries && 
+            (error.message.includes('network') || error.message.includes('timeout'))) {
+          retryCount++;
+          await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
+          return attemptQuery();
+        }
+        
+        throw error;
+      }
+
+      return data;
+    } catch (error) {
+      if (retryCount < maxRetries) {
+        retryCount++;
+        await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
+        return attemptQuery();
+      }
+      logError(error, { action: 'safeQuery', tableName, options, retryCount });
+      throw error;
+    }
+  };
+
+  return attemptQuery();
+}; 
