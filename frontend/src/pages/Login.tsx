@@ -12,7 +12,8 @@ import {
   IconButton
 } from '@mui/material';
 import { Visibility, VisibilityOff } from '@mui/icons-material';
-import { supabase, getCurrentSession, handleAuthError } from '../lib/database/supabase';
+import supabase from '../lib/database/supabase';
+import { getCurrentSession, handleAuthError } from '../lib/auth/auth';
 import { useNavigate } from 'react-router-dom';
 import { useDispatch } from 'react-redux';
 import { login } from '../store/slices/authSlice';

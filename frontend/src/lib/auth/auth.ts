@@ -1,0 +1,71 @@
+import supabase from '../database/supabase';
+import { logError } from '../../utils/errorHandler';
+
+/**
+ * Lấy phiên đăng nhập hiện tại từ Supabase
+ * @returns Session object hoặc null nếu không có phiên
+ */
+export const getCurrentSession = async () => {
+  try {
+    const { data, error } = await supabase.auth.getSession();
+    if (error) throw error;
+    return data.session;
+  } catch (error) {
+    logError(error, { source: 'getCurrentSession' });
+    return null;
+  }
+};
+
+/**
+ * Kiểm tra xem người dùng đã đăng nhập hay chưa
+ * @returns true nếu đã đăng nhập, false nếu chưa
+ */
+export const isAuthenticated = async () => {
+  const session = await getCurrentSession();
+  return !!session;
+};
+
+/**
+ * Xử lý các lỗi xác thực từ Supabase
+ * @param error Lỗi từ Supabase
+ * @returns true nếu lỗi đã được xử lý, false nếu không
+ */
+export const handleAuthError = async (error: any) => {
+  // Log lỗi cho mục đích debug
+  console.error('Auth error:', error);
+  
+  if (!error) return false;
+  
+  // Kiểm tra lỗi hết hạn token
+  if (
+    error.code === '401' || 
+    error.message?.includes('JWT expired') || 
+    error.message?.includes('invalid token') ||
+    error.message?.includes('not authenticated')
+  ) {
+    try {
+      // Thử refresh token
+      const { data } = await supabase.auth.refreshSession();
+      
+      if (data.session) {
+        console.log('Token đã được làm mới thành công');
+        return true;
+      }
+      
+      // Nếu không refresh được, đăng xuất
+      await supabase.auth.signOut();
+      
+      // Redirect về trang login nếu đang ở client-side
+      if (typeof window !== 'undefined') {
+        window.location.href = '/login';
+      }
+      
+      return true;
+    } catch (refreshError) {
+      logError(refreshError, { source: 'handleAuthError:refresh' });
+      return false;
+    }
+  }
+  
+  return false;
+}; 
