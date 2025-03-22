@@ -9,6 +9,7 @@ import { BrowserRouter } from 'react-router-dom';
 import { SnackbarProvider } from 'notistack';
 import '@fontsource/mulish';
 import './utils/chartConfig';
+import ErrorBoundary from './components/ErrorBoundary';
 
 const root = ReactDOM.createRoot(
   document.getElementById('root') as HTMLElement
@@ -19,7 +20,9 @@ root.render(
     <Provider store={store}>
       <BrowserRouter>
         <SnackbarProvider maxSnack={3}>
-          <App />
+          <ErrorBoundary>
+            <App />
+          </ErrorBoundary>
         </SnackbarProvider>
       </BrowserRouter>
     </Provider>

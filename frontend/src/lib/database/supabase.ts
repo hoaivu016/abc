@@ -1,25 +1,12 @@
 import { createClient } from '@supabase/supabase-js';
-import type { User, Session } from '@supabase/supabase-js';
-
-// Lấy thông tin kết nối từ biến môi trường
-const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
-const supabaseAnonKey = process.env.REACT_APP_SUPABASE_ANON_KEY;
-const defaultEmail = process.env.REACT_APP_DEFAULT_EMAIL;
-const defaultPassword = process.env.REACT_APP_DEFAULT_PASSWORD;
+import { ENV, validateEnvironment } from '../../utils/environment';
+import { logError, withErrorHandling } from '../../utils/errorHandler';
 
 // Kiểm tra các biến môi trường bắt buộc
-if (!supabaseUrl || !supabaseAnonKey || !defaultEmail || !defaultPassword) {
-  throw new Error(
-    'Thiếu biến môi trường. Vui lòng kiểm tra các biến sau trong file .env:\n' +
-    'REACT_APP_SUPABASE_URL\n' +
-    'REACT_APP_SUPABASE_ANON_KEY\n' +
-    'REACT_APP_DEFAULT_EMAIL\n' +
-    'REACT_APP_DEFAULT_PASSWORD'
-  );
-}
+validateEnvironment();
 
 // Tạo client Supabase với cấu hình nâng cao
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+export const supabase = createClient(ENV.SUPABASE_URL, ENV.SUPABASE_ANON_KEY, {
   auth: {
     autoRefreshToken: true,
     persistSession: true,
@@ -36,25 +23,37 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   },
 });
 
+// Theo dõi lỗi trong Supabase client
+supabase.auth.onAuthStateChange((event, session) => {
+  if (event === 'SIGNED_OUT' || event === 'USER_DELETED') {
+    // Xóa dữ liệu khi đăng xuất
+    localStorage.removeItem('supabase.auth.token');
+  } else if (event === 'SIGNED_IN') {
+    console.log('Đăng nhập thành công:', session?.user?.email);
+  } else if (event === 'TOKEN_REFRESHED') {
+    console.log('Token đã được làm mới');
+  }
+});
+
 // Hàm đăng nhập với tài khoản mặc định
-export const signInWithDefaultAccount = async (): Promise<Session | null> => {
+export const signInWithDefaultAccount = withErrorHandling(async () => {
   try {
     // Xóa session cũ nếu có
     await supabase.auth.signOut();
     
-    console.log('Đang thử đăng nhập với:', defaultEmail);
+    console.log('Đang thử đăng nhập với:', ENV.DEFAULT_EMAIL);
     
     // Thực hiện đăng nhập với tài khoản mặc định
     const { data, error } = await supabase.auth.signInWithPassword({
-      email: defaultEmail,
-      password: defaultPassword
+      email: ENV.DEFAULT_EMAIL,
+      password: ENV.DEFAULT_PASSWORD
     });
     
     if (error) {
       console.error('Lỗi đăng nhập:', error);
       if (error.message === 'Invalid login credentials') {
         console.error('Thông tin đăng nhập không hợp lệ. Vui lòng kiểm tra email và mật khẩu trong biến môi trường.');
-        console.error('REACT_APP_DEFAULT_EMAIL:', defaultEmail);
+        console.error('REACT_APP_DEFAULT_EMAIL:', ENV.DEFAULT_EMAIL);
         // Không log mật khẩu vì lý do bảo mật
       }
       throw error;
@@ -67,170 +66,160 @@ export const signInWithDefaultAccount = async (): Promise<Session | null> => {
     console.log('Đăng nhập thành công:', data.user?.email);
     return data.session;
   } catch (error) {
-    console.error('Lỗi xác thực:', error);
-    return null;
+    // Thêm thông tin context cho lỗi
+    logError(error, { 
+      action: 'signInWithDefaultAccount',
+      email: ENV.DEFAULT_EMAIL,
+      supabaseUrl: ENV.SUPABASE_URL
+    });
+    throw error;
   }
-};
+});
 
 // Kiểm tra và khôi phục phiên
-export const checkAndRestoreSession = async (): Promise<Session | null> => {
-  try {
-    const { data: { session } } = await supabase.auth.getSession();
-    
-    if (!session) {
-      return null;
-    }
-    
-    return session;
-  } catch (error) {
-    console.error('Lỗi xác thực:', error);
-    return null;
-  }
-};
+export const checkAndRestoreSession = withErrorHandling(async () => {
+  const { data: { session } } = await supabase.auth.getSession();
+  return session;
+});
 
 // Kiểm tra kết nối Supabase
-export const checkSupabaseConnection = async (): Promise<boolean> => {
-  try {
-    // Kiểm tra và khôi phục phiên hiện tại
-    let session = await checkAndRestoreSession();
-    
-    // Nếu chưa có phiên, thử đăng nhập với tài khoản mặc định
-    if (!session) {
+export const checkSupabaseConnection = withErrorHandling(async () => {
+  // Kiểm tra và khôi phục phiên hiện tại
+  let session = await checkAndRestoreSession();
+  
+  // Nếu chưa có phiên, thử đăng nhập với tài khoản mặc định
+  if (!session) {
+    try {
       session = await signInWithDefaultAccount();
       if (!session) {
         console.error('Không thể đăng nhập');
         return false;
       }
+    } catch (error) {
+      logError(error, { action: 'checkSupabaseConnection - signInWithDefaultAccount' });
+      return false;
     }
+  }
+  
+  try {
+    // Thực hiện truy vấn đơn giản để kiểm tra kết nối
+    const { error } = await supabase.from('users').select('id').limit(1);
     
-    // Danh sách các bảng cần kiểm tra
-    const tablesToCheck = [
-      'vehicles', 
-      'staff', 
-      'kpi_targets', 
-      'support_bonuses'
-    ];
-
-    // Kiểm tra kết nối với từng bảng
-    for (const table of tablesToCheck) {
-      const { error } = await supabase
-        .from(table)
-        .select('id')
-        .limit(1);
-      
-      if (error && error.code !== 'PGRST116') { // Bỏ qua lỗi không có dữ liệu
-        console.error(`Lỗi kết nối với bảng ${table}:`, error);
-        return false;
-      }
+    if (error && error.code !== 'PGRST116') { // Bỏ qua lỗi không có dữ liệu
+      logError(error, { action: 'checkSupabaseConnection - testQuery' });
+      return false;
     }
     
     return true;
   } catch (error) {
-    console.error('Lỗi không xác định khi kiểm tra kết nối:', error);
+    logError(error, { action: 'checkSupabaseConnection' });
     return false;
   }
-};
+});
 
 // Làm mới token
-export const refreshSupabaseToken = async (): Promise<Session | null> => {
-  try {
-    const { data: { session } } = await supabase.auth.refreshSession();
-    return session;
-  } catch (error) {
-    console.error('Lỗi làm mới token:', error);
-    return null;
-  }
-};
+export const refreshSupabaseToken = withErrorHandling(async () => {
+  const { data: { session } } = await supabase.auth.refreshSession();
+  return session;
+});
 
 // Hàm kiểm tra và xử lý lỗi xác thực
-export const handleAuthError = async (error: any): Promise<boolean> => {
+export const handleAuthError = withErrorHandling(async (error: any) => {
   if (error.code === '42501' || error.status === 401) {
     try {
       // Thử đăng nhập lại với tài khoản mặc định
       await signInWithDefaultAccount();
       return true;
     } catch (authError) {
-      console.error('Lỗi xác thực:', authError);
+      logError(authError, { action: 'handleAuthError - reauth' });
       return false;
     }
   }
   return false;
-};
+});
 
 // Hàm truy vấn an toàn cho các bảng
-export const safeQuery = async (tableName: string, options: any = {}, retryCount = 0) => {
-  try {
-    // Đảm bảo xác thực
-    let session = await checkAndRestoreSession();
-    
-    if (!session) {
+export const safeQuery = withErrorHandling(async (tableName: string, options: any = {}, retryCount = 0) => {
+  // Đảm bảo xác thực
+  let session = await checkAndRestoreSession();
+  
+  if (!session) {
+    try {
       session = await signInWithDefaultAccount();
       if (!session) {
-        console.error('Không thể xác thực để truy vấn dữ liệu');
-        return null;
+        throw new Error('Không thể xác thực để truy vấn dữ liệu');
       }
+    } catch (error) {
+      logError(error, { action: 'safeQuery - auth', tableName });
+      throw error;
     }
+  }
 
-    // Truy vấn với các tùy chọn mặc định
-    const defaultOptions = {
-      select: '*',
-      order: 'created_at.desc',
-      ...options
-    };
+  // Truy vấn với các tùy chọn mặc định
+  const defaultOptions = {
+    select: '*',
+    order: 'created_at.desc',
+    ...options
+  };
 
-    // Xây dựng query
-    let query = supabase
-      .from(tableName)
-      .select(defaultOptions.select);
+  // Xây dựng query
+  let query = supabase
+    .from(tableName)
+    .select(defaultOptions.select);
 
-    // Thêm order nếu có
-    if (defaultOptions.order) {
-      query = query.order(defaultOptions.order);
-    }
+  // Thêm order nếu có
+  if (defaultOptions.order) {
+    query = query.order(defaultOptions.order);
+  }
 
-    // Áp dụng các bộ lọc bổ sung nếu có
-    if (defaultOptions.filter) {
-      Object.keys(defaultOptions.filter).forEach(key => {
-        query = query.filter(key, 'eq', defaultOptions.filter[key]);
-      });
-    }
+  // Áp dụng các bộ lọc bổ sung nếu có
+  if (defaultOptions.filter) {
+    Object.keys(defaultOptions.filter).forEach(key => {
+      query = query.filter(key, 'eq', defaultOptions.filter[key]);
+    });
+  }
 
+  try {
     // Thực hiện query
     const { data, error } = await query;
 
     if (error) {
-      console.error(`Lỗi khi truy vấn ${tableName}:`, error);
-      
       // Xử lý các loại lỗi cụ thể
       if (error.code === '42501' || error.status === 401) {
         // Lỗi xác thực - thử đăng nhập lại
-        if (retryCount < 3) {
+        if (retryCount < 2) {
           await signInWithDefaultAccount();
           return safeQuery(tableName, options, retryCount + 1);
         }
+        throw new Error(`Lỗi xác thực sau ${retryCount + 1} lần thử: ${error.message}`);
       } else if (error.code === '42P01') {
         // Bảng không tồn tại
-        console.error(`Bảng ${tableName} không tồn tại`);
-        if (tableName === 'users') {
-          console.error('Bảng users chưa được tạo. Vui lòng chạy migration.');
-        }
+        throw new Error(`Bảng ${tableName} không tồn tại`);
       } else if (error.code === '500') {
         // Lỗi server - thử lại sau
-        if (retryCount < 3) {
+        if (retryCount < 2) {
           await new Promise(resolve => setTimeout(resolve, 1000)); // Đợi 1 giây
           return safeQuery(tableName, options, retryCount + 1);
         }
+        throw new Error(`Lỗi server sau ${retryCount + 1} lần thử: ${error.message}`);
       } else if (error.code === '23505') {
         // Lỗi unique constraint violation
-        console.error(`Lỗi ràng buộc unique cho bảng ${tableName}`);
+        throw new Error(`Lỗi ràng buộc unique cho bảng ${tableName}: ${error.message}`);
+      } else {
+        // Lỗi khác
+        throw error;
       }
-
-      return null;
     }
 
     return data || [];
   } catch (error) {
-    console.error(`Lỗi không xác định khi truy vấn ${tableName}:`, error);
-    return null;
+    // Log lỗi với context đầy đủ
+    logError(error, {
+      action: 'safeQuery',
+      tableName,
+      options,
+      retryCount
+    });
+    throw error;
   }
-}; 
+}); 
