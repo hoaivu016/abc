@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#000000" />
+    <meta name="theme-color" content="#1976d2" />
     <meta
       name="description"
       content="Vehicle Management System"
@@ -13,7 +13,25 @@
     <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
     <title>Vehicle Management</title>
     <script>
-      // Xử lý lỗi message port closed toàn cục
+      // 1. Đè lên hàm console.error gốc
+      (function() {
+        const originalConsoleError = console.error;
+        console.error = function(...args) {
+          // Không log lỗi message port
+          if (
+            args.length > 0 && 
+            typeof args[0] === 'string' && 
+            (args[0].includes('message port closed') || 
+             args[0].includes('Failed to load resource: net::'))
+          ) {
+            console.warn('Đã ngăn chặn lỗi:', args[0].substring(0, 50) + '...');
+            return;
+          }
+          originalConsoleError.apply(console, args);
+        };
+      })();
+
+      // 2. Xử lý lỗi window.onerror
       window.addEventListener('error', function(event) {
         if (event.message && event.message.includes('message port closed')) {
           console.warn('Đã ngăn chặn lỗi message port closed');
@@ -23,15 +41,27 @@
         }
       });
 
-      // Xử lý lỗi tài nguyên không tìm thấy
+      // 3. Xử lý lỗi tài nguyên không tìm thấy
       window.addEventListener('error', function(event) {
         if (event.target && (event.target.tagName === 'LINK' || event.target.tagName === 'SCRIPT')) {
-          console.warn('Failed to load resource:', event.target.src || event.target.href);
+          console.warn('Tài nguyên không tìm thấy:', event.target.src || event.target.href);
           event.preventDefault();
           event.stopPropagation();
           return false;
         }
       }, true);
+
+      // 4. Xử lý promise rejection
+      window.addEventListener('unhandledrejection', function(event) {
+        if (event.reason && event.reason.message && 
+            (event.reason.message.includes('message port closed') || 
+             event.reason.message.includes('Failed to fetch'))) {
+          console.warn('Đã ngăn chặn promise rejection:', event.reason.message);
+          event.preventDefault();
+          event.stopPropagation();
+          return false;
+        }
+      });
     </script>
   </head>
   <body>
@@ -41,7 +71,7 @@
       // Đăng ký service worker
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', function() {
-          navigator.serviceWorker.register('/service-worker.js')
+          navigator.serviceWorker.register('/service-worker.js', { scope: '/' })
             .then(function(registration) {
               console.log('ServiceWorker đăng ký thành công: ', registration.scope);
             })
@@ -49,6 +79,14 @@
               console.log('Lỗi đăng ký ServiceWorker: ', error);
             });
         });
+      }
+
+      // Fix 404 error khi load lại trang
+      if (window.location.pathname !== '/' && !window.location.pathname.includes('.')) {
+        if (window.history && window.history.replaceState) {
+          const url = window.location.origin + window.location.pathname + window.location.search;
+          window.history.replaceState(null, document.title, url);
+        }
       }
     </script>
     <!--

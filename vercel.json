@@ -1,65 +1,93 @@
 {
   "version": 2,
-  "builds": [
+  "buildCommand": "cd frontend && npm install && npm run build",
+  "outputDirectory": "frontend/build",
+  "trailingSlash": false,
+  "cleanUrls": true,
+  "headers": [
     {
-      "src": "frontend/package.json",
-      "use": "@vercel/static-build",
-      "config": {
-        "distDir": "build"
-      }
+      "source": "/service-worker.js",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        },
+        {
+          "key": "Service-Worker-Allowed",
+          "value": "/"
+        }
+      ]
+    },
+    {
+      "source": "/(.*)\\.(?:js|css|jpg|jpeg|gif|png|ico|svg|woff|woff2|ttf|otf)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "X-XSS-Protection",
+          "value": "1; mode=block"
+        }
+      ]
     }
+  ],
+  "rewrites": [
+    { "source": "/service-worker.js", "destination": "/service-worker.js" },
+    { "source": "/manifest.json", "destination": "/manifest.json" },
+    { "source": "/favicon.ico", "destination": "/favicon.ico" },
+    { "source": "/logo192.png", "destination": "/logo192.png" },
+    { "source": "/logo512.png", "destination": "/logo512.png" },
+    { "source": "/offline.html", "destination": "/offline.html" },
+    { "source": "/404.html", "destination": "/404.html" },
+    { "source": "/(.*)", "destination": "/index.html" }
   ],
   "routes": [
     {
+      "handle": "filesystem"
+    },
+    {
       "src": "/service-worker.js",
       "headers": {
-        "cache-control": "public, max-age=0, must-revalidate"
+        "Cache-Control": "public, max-age=0, must-revalidate",
+        "Service-Worker-Allowed": "/"
       },
-      "dest": "/frontend/build/service-worker.js"
+      "continue": true
     },
     {
-      "src": "/static/(.*)",
-      "headers": {
-        "Cache-Control": "public, max-age=31536000, immutable"
-      },
-      "dest": "/frontend/build/static/$1"
-    },
-    {
-      "src": "/favicon.ico",
-      "headers": {
-        "Cache-Control": "public, max-age=31536000, immutable"
-      },
-      "dest": "/frontend/build/favicon.ico"
-    },
-    {
-      "src": "/manifest.json",
-      "headers": {
-        "Content-Type": "application/json",
-        "Cache-Control": "public, max-age=31536000, immutable"
-      },
-      "dest": "/frontend/build/manifest.json"
-    },
-    {
-      "src": "/logo192.png",
-      "headers": {
-        "Cache-Control": "public, max-age=31536000, immutable"
-      },
-      "dest": "/frontend/build/logo192.png"
-    },
-    {
-      "src": "/logo512.png",
-      "headers": {
-        "Cache-Control": "public, max-age=31536000, immutable"
-      },
-      "dest": "/frontend/build/logo512.png"
-    },
-    {
-      "src": "/(.*)",
+      "src": "/offline.html",
       "headers": {
         "Cache-Control": "no-cache, no-store, must-revalidate"
       },
-      "dest": "/frontend/build/index.html"
+      "continue": true
+    },
+    {
+      "src": "/404.html",
+      "headers": {
+        "Cache-Control": "no-cache, no-store, must-revalidate"
+      },
+      "continue": true
+    },
+    {
+      "src": "/(.*)",
+      "status": 200,
+      "headers": {
+        "Cache-Control": "no-cache, no-store, must-revalidate"
+      },
+      "dest": "/index.html"
     }
-  ],
-  "trailingSlash": false
+  ]
 } 
