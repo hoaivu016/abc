@@ -356,4 +356,4 @@ self.addEventListener('message', (event) => {
         }
       });
   }
-}); 
+});   

@@ -1,4 +1,4 @@
-import { supabase } from './supabase';
+import supabase from './supabase';
 import { Vehicle, VehicleStatus } from '../../types/vehicles/vehicle';
 import { Staff } from '../../models/staff';
 import { KpiTarget, SupportDepartmentBonus } from '../../models/kpi';

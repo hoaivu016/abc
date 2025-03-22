@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { KpiTarget, KpiTargetType, SupportDepartmentBonus } from '../types/staff/kpi';
 import { Staff } from '../types/staff/staff';
-import { supabase } from '../lib/database/supabase';
+import supabase from '../lib/database/supabase';
 
 interface KpiDataState {
   kpis: KpiTarget[];

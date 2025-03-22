@@ -22,7 +22,7 @@ import {
   Alert, 
   Snackbar 
 } from '@mui/material';
-import { supabase } from '../../../lib/database/supabase';
+import supabase from '../../../lib/database/supabase';
 
 // Định nghĩa kiểu User
 interface User {

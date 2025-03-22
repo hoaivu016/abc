@@ -72,6 +72,7 @@ import {
 import { FinancialAnalysis } from './modules/admin/components';
 // Import hook
 import { useVehicleDelete } from './hooks/useVehicleDelete';
+import { checkSupabaseConnection } from './lib/database/supabase';
 // Import component quản lý tài khoản
 import AccountManagement from './modules/accounts/components/AccountManagement';
 import { getCurrentSession } from './lib/auth/auth';

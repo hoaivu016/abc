@@ -42,9 +42,21 @@ if (typeof window !== 'undefined') {
   window.addEventListener('error', (event) => {
     if (event.message.includes('message port closed')) {
       console.warn('Message port closed, attempting to reconnect...');
+      // Ngăn chặn hiển thị lỗi trên console
+      event.preventDefault();
+      // Thử kết nối lại với Realtime
       supabase.realtime.connect();
     }
   });
+
+  // Xử lý các lỗi tài nguyên không tìm thấy
+  window.addEventListener('error', (event) => {
+    if (event.target && (event.target as any).tagName === 'LINK' || (event.target as any).tagName === 'SCRIPT') {
+      console.warn('Failed to load resource:', (event.target as any).src || (event.target as any).href);
+      // Ngăn lỗi hiển thị trên console
+      event.preventDefault();
+    }
+  }, true);
 }
 
 // Biến để theo dõi trạng thái retry
