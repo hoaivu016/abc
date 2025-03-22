@@ -58,7 +58,7 @@ import {
   calculateTotalCommission
 } from './types/staff/staff';
 import { KpiTarget, SupportDepartmentBonus } from './models/kpi';
-import { supabase } from './lib/database/supabase';
+import supabase from './lib/database/supabase';
 import { 
   syncPendingActions, 
   loadVehiclesFromSupabase, 
@@ -72,11 +72,10 @@ import {
 import { FinancialAnalysis } from './modules/admin/components';
 // Import hook
 import { useVehicleDelete } from './hooks/useVehicleDelete';
-import { checkSupabaseConnection } from './lib/database/supabase';
 // Import component quản lý tài khoản
 import AccountManagement from './modules/accounts/components/AccountManagement';
 import { getCurrentSession } from './lib/auth/auth';
-import { logout } from './redux/actions/authActions';
+import { logout } from './store/slices/authSlice';
 
 // Định nghĩa interface cho các tab
 interface TabPanelProps {
